@@ -1,4 +1,4 @@
-import dash, json, anthropic, base64, io, os, time, re
+import dash, json, anthropic, base64, io, os, sys, time, re
 import pandas as pd
 try:
     from json_repair import repair_json as _repair_json
@@ -29,6 +29,7 @@ VERIFY_SEARCH_TOOL = {"type": "web_search_20250305", "name": "web_search", "max_
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
+from dotenv import load_dotenv; load_dotenv(r"S:\benjaminSuermann\3_env\.env")
 API_KEY   = os.environ["ANTHROPIC_API_KEY"]
 MODEL_ANALYSIS = "claude-opus-4-8"
 MODEL_ADVISOR  = "claude-opus-4-8"
@@ -39,19 +40,21 @@ LOGO_B64  = base64.b64encode(LOGO_PATH.read_bytes()).decode() if LOGO_PATH.exist
 # The system reads this Excel live on every portfolio request (mtime-cached).
 PORTFOLIO_PATH = Path(os.environ.get("PORTFOLIO_PATH", r"S:\benjaminSuermann\pfExcel.xlsx"))
 
-VF  = "'Season Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif"
-VFH = "'Season Mix', 'Georgia', serif"
+sys.path.insert(0, r"S:\benjaminSuermann\3_env")
+import pyDashDesign as _D
+VF  = _D.FONT["family"]
+VFH = _D.FONT["family"]
 C   = {
-    "bg":      "#F2F1EF",
-    "surface": "#FFFFFF",
-    "border":  "rgba(2,35,60,0.10)",
-    "navy":    "#02233C",
-    "ink":     "#001625",
-    "accent":  "#B8D1E5",
-    "rose":    "#AA3F69",
-    "muted":   "#5a6e7f",
-    "green":   "#1a6e3c",
-    "red":     "#a80000",
+    "bg":      _D.COLORS["background"],
+    "surface": _D.COLORS["surface"],
+    "border":  _D.COLORS["border"],
+    "navy":    _D.COLORS["primary"],
+    "ink":     _D.COLORS["text"],
+    "accent":  _D.COLORS["positive"],
+    "rose":    _D.COLORS["negative"],
+    "muted":   _D.COLORS["secondary"],
+    "green":   _D.COLORS["positive"],
+    "red":     _D.COLORS["negative"],
 }
 
 # ── Mode Configs ──────────────────────────────────────────────────────────────
