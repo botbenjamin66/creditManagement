@@ -1,4 +1,4 @@
-﻿import sys, subprocess
+import sys, subprocess
 import pandas as pd
 import plotly.graph_objects as go
 from dash import Dash, dcc, html, dash_table, Input, Output
