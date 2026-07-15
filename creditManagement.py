@@ -14,21 +14,227 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-from dash import Dash, html, dcc, Input, Output, State, ctx, no_update
+from dash import Dash, html, dcc, dash_table, Input, Output, State, ctx, no_update
+from dash.dash_table.Format import Format, Scheme, Symbol
+
+
+class ds:
+    HEX = {"background": "#0E0B24", "surface": "#221E34", "border": "#2A2740", "text": "#D4CEC0",
+           "ink": "#E7E1D3", "muted": "#9691A9", "hairline": "rgba(192,163,100,.13)",
+           "tint": "rgba(192,163,100,.12)", "header": "#0A081C", "navy": "#C0A364",
+           "primary": "#C0A364", "secondary": "#9691A9", "positive": "#6BA793",
+           "negative": "#B85C6A", "highlight": "#B0885A", "info": "#8F9E86"}
+    COLORS = {k: (f"var(--c-{k})" if k in ("background", "surface", "border", "text", "ink",
+              "muted", "hairline", "tint", "header") else v) for k, v in HEX.items()}
+    FONT = {"family": "'Georgia Pro', Georgia, 'Times New Roman', serif",
+            "numeric": "'Georgia Pro', Georgia, 'Times New Roman', serif",
+            "serif": "'Georgia Pro', Georgia, 'Times New Roman', serif",
+            "size_title": 30, "size_subtitle": 19, "size_body": 15, "size_label": 12,
+            "weight_title": 400, "weight_body": 300}
+    CHART_PALETTE = ["#C0A364", "#6BA793", "#9691A9", "#B85C6A", "#8F9E86", "#B0885A"]
+    AXIS_TITLE_FONT = {"family": FONT["numeric"], "size": 11, "color": HEX["muted"], "weight": "bold"}
+    RADIUS = {"sm": "2px", "md": "3px", "lg": "4px"}
+    SHADOW = {"sm": "inset 0 1px 0 rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.42), 0 12px 30px rgba(0,0,0,.26)",
+              "md": "inset 0 1px 0 rgba(255,255,255,.06), 0 18px 46px rgba(0,0,0,.52), 0 4px 12px rgba(0,0,0,.4)"}
+    LABEL_STYLE = {"fontFamily": FONT["serif"], "fontSize": "12px",
+                   "textTransform": "lowercase", "letterSpacing": "0.3px", "fontWeight": 500,
+                   "color": COLORS["secondary"]}
+    TITLE_STYLE = {"fontFamily": FONT["serif"], "fontSize": f"{FONT['size_title']}px",
+                   "fontWeight": 400, "color": COLORS["ink"], "letterSpacing": "0", "textTransform": "lowercase"}
+    NUM_STYLE = {"fontFamily": FONT["numeric"], "fontVariantNumeric": "tabular-nums", "color": COLORS["ink"]}
+    GOLD_GLOSS = "linear-gradient(180deg,#D9BF87 0%,#C0A364 52%,#A2854A 100%)"
+    CARD_STYLE = {"background": "linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,0) 34%),"
+                  + COLORS["surface"], "border": f"1px solid {COLORS['border']}",
+                  "borderRadius": RADIUS["lg"], "padding": "20px 22px", "boxShadow": SHADOW["sm"]}
+    BUTTON_STYLE = {"fontFamily": FONT["serif"], "fontSize": "15px", "fontWeight": 500,
+                    "padding": "9px 24px", "border": "1px solid #8F7539", "borderRadius": RADIUS["md"],
+                    "background": GOLD_GLOSS, "color": "#0E0B24", "cursor": "pointer",
+                    "letterSpacing": "0.3px", "textTransform": "lowercase",
+                    "boxShadow": "inset 0 1px 0 rgba(255,255,255,.4), 0 2px 6px rgba(0,0,0,.38)"}
+    TABLE_STYLE = {"overflowX": "auto", "borderRadius": RADIUS["lg"], "maxHeight": "560px"}
+    TABLE_HEADER_STYLE = {"fontFamily": FONT["family"], "fontWeight": 700, "fontSize": "11px",
+                          "textTransform": "lowercase", "letterSpacing": "0.4px",
+                          "backgroundColor": COLORS["header"], "color": COLORS["navy"],
+                          "border": f"1px solid {COLORS['border']}", "padding": "11px 10px", "textAlign": "center"}
+    TABLE_CELL_STYLE = {"fontFamily": FONT["family"], "fontSize": "13px", "padding": "9px 10px",
+                        "textAlign": "left", "color": COLORS["text"], "backgroundColor": COLORS["surface"],
+                        "border": f"1px solid {COLORS['border']}", "whiteSpace": "normal", "minWidth": "72px"}
+    PLOTLY_LAYOUT = {"paper_bgcolor": HEX["surface"], "plot_bgcolor": HEX["surface"],
+                     "font": {"family": FONT["family"], "size": 12, "color": HEX["text"]},
+                     "colorway": CHART_PALETTE,
+                     "xaxis": {"gridcolor": HEX["hairline"], "linecolor": HEX["border"], "zeroline": False},
+                     "yaxis": {"gridcolor": HEX["hairline"], "linecolor": HEX["border"], "zeroline": False}}
+
+    @staticmethod
+    def fmt_num(v, fmt="{:+,.2f}"):
+        return fmt.format(v).replace("-", "−").replace(",", " ")
+
+    @staticmethod
+    def logo(size=44):
+        px = max(15, int(size * 0.5))
+        return html.Div([
+            html.Span("nord", style={"fontFamily": ds.FONT["numeric"], "fontWeight": 700,
+                                     "color": "var(--c-logo)", "letterSpacing": "0.2px"}),
+            html.Span("IX", style={"fontFamily": ds.FONT["serif"], "fontWeight": 600,
+                                   "color": "var(--c-brand)", "letterSpacing": "0.2px"}),
+        ], style={"fontSize": f"{px}px", "lineHeight": "1", "display": "inline-flex", "alignItems": "baseline"})
+
+    @staticmethod
+    def page(children):
+        return html.Div(children, className="cm-page", style={
+            "background": "linear-gradient(180deg,#16112E 0%,#0E0B24 46%,#0A0819 100%)",
+            "backgroundAttachment": "fixed", "minHeight": "100vh",
+            "fontFamily": ds.FONT["family"], "color": ds.COLORS["text"]})
+
+    @staticmethod
+    def container(children, max_width=1200):
+        return html.Div(children, style={"maxWidth": f"{max_width}px", "margin": "0 auto", "padding": "0 22px"})
+
+    @staticmethod
+    def panel(children, pad="20px 22px"):
+        return html.Div(children, className="cm-panel", style={**ds.CARD_STYLE, "padding": pad, "marginBottom": "24px"})
+
+    @staticmethod
+    def section(text):
+        return html.Div([
+            html.Div(style={"width": "40px", "height": "2px", "marginBottom": "11px",
+                            "background": "linear-gradient(90deg,#D9BF87,rgba(192,163,100,0))",
+                            "boxShadow": "0 0 9px rgba(192,163,100,.55)"}),
+            html.Div(text, style={"fontFamily": ds.FONT["serif"], "fontSize": "22px", "fontWeight": 400,
+                                  "letterSpacing": "0.2px", "color": ds.COLORS["ink"], "textTransform": "lowercase"})],
+            style={"margin": "48px 2px 20px"})
+
+    @staticmethod
+    def brand_header(title=None, subtitle=None, meta=None):
+        left = []
+        if title:
+            left.append(html.Div(title, style={**ds.TITLE_STYLE, "lineHeight": "1.1"}))
+        if subtitle:
+            left.append(html.Div(subtitle, style={**ds.LABEL_STYLE, "marginTop": "3px"}))
+        return html.Div([
+            html.Div([ds.logo(46)] + ([html.Div(left)] if left else []) + [
+                      html.Div(meta or "", style={**ds.LABEL_STYLE, "marginLeft": "auto", "color": ds.COLORS["muted"]})],
+                     style={"display": "flex", "alignItems": "center", "gap": "16px", "padding": "18px 30px",
+                            "background": "linear-gradient(180deg,#12102A,#0A081C)"}),
+            html.Div(style={"height": "2px",
+                            "background": "linear-gradient(90deg,rgba(192,163,100,0),#C0A364 50%,rgba(192,163,100,0))"}),
+            html.Div(style={"height": "1px",
+                            "background": "linear-gradient(90deg,transparent,rgba(0,0,0,.55),transparent)"})],
+            className="cm-header")
+
+    @staticmethod
+    def kpi_card(label, value, fmt="{:+.2f}", unit=None):
+        accent = ds.COLORS["positive"] if value >= 0 else ds.COLORS["negative"]
+        return html.Div([
+            html.Div(style={"borderTop": f"2px solid {ds.COLORS['navy']}", "marginBottom": "12px"}),
+            html.Div(label, style=ds.LABEL_STYLE),
+            html.Div([
+                html.Span(ds.fmt_num(value, fmt), style={**ds.NUM_STYLE, "fontWeight": 300,
+                          "fontSize": "30px", "letterSpacing": "-0.5px"}),
+                html.Span(f" {unit}" if unit else "", style={**ds.LABEL_STYLE, "fontSize": "12px"}),
+                html.Span(" " + ("▲" if value >= 0 else "▼"),
+                          style={"color": accent, "fontSize": "13px", "verticalAlign": "3px"}),
+            ], style={"marginTop": "6px", "lineHeight": "1"}),
+        ], className="cm-panel", style={**ds.CARD_STYLE, "borderRadius": ds.RADIUS["md"], "flex": "1",
+                                        "minWidth": "140px", "padding": "14px 18px 16px"})
+
+    @staticmethod
+    def layoutNoAxes():
+        return {k: v for k, v in ds.PLOTLY_LAYOUT.items() if k not in ("xaxis", "yaxis")}
+
+    @staticmethod
+    def style_figure(fig, height=360, legend=False, title=None):
+        tick = {"family": ds.FONT["numeric"], "size": 11}
+        axis_title = {"font": dict(ds.AXIS_TITLE_FONT)}
+        lay = dict(ds.PLOTLY_LAYOUT)
+        lay["xaxis"] = {**lay["xaxis"], "zeroline": False, "tickfont": tick, "title": axis_title}
+        lay["yaxis"] = {**lay["yaxis"], "zeroline": False, "griddash": "dot", "gridcolor": ds.HEX["hairline"],
+                        "ticks": "outside", "tickcolor": "rgba(0,0,0,0)", "tickfont": tick, "title": axis_title}
+        fig.update_layout(**lay, height=height, showlegend=legend, hovermode="x unified",
+            margin=dict(t=30 if (legend or title) else 12, b=30, l=8, r=64),
+            legend=dict(orientation="h", y=1.13, x=0, bgcolor="rgba(0,0,0,0)", font=dict(size=12)),
+            hoverlabel=dict(bgcolor=ds.HEX["header"], bordercolor=ds.HEX["hairline"],
+                            font=dict(family=ds.FONT["numeric"], size=12, color=ds.HEX["text"])),
+            title=(dict(text=title, x=0, font=dict(family=ds.FONT["family"], size=ds.FONT["size_subtitle"],
+                        color=ds.HEX["text"])) if title else None))
+        return fig
+
+    @staticmethod
+    def axisTitles(fig, x=None, y=None):
+        if x is not None:
+            fig.update_layout(xaxis=dict(title=dict(text=x, font=dict(ds.AXIS_TITLE_FONT))))
+        if y is not None:
+            fig.update_layout(yaxis=dict(title=dict(text=y, font=dict(ds.AXIS_TITLE_FONT))))
+        return fig
+
+    @staticmethod
+    def data_table(numericCols=(), **kwargs):
+        base = dict(sort_action="native", fixed_rows={"headers": True}, style_table=ds.TABLE_STYLE,
+            style_header={**ds.TABLE_HEADER_STYLE, "backgroundColor": ds.COLORS["header"], "border": "none",
+                          "borderBottom": f"2px solid {ds.COLORS['navy']}", "color": ds.COLORS["muted"]},
+            style_cell={**ds.TABLE_CELL_STYLE, "border": "none", "borderBottom": f"1px solid {ds.COLORS['hairline']}"},
+            style_cell_conditional=[{"if": {"column_id": c}, "textAlign": "right", "fontFamily": ds.FONT["numeric"],
+                                     "fontVariantNumeric": "tabular-nums"} for c in numericCols],
+            style_data_conditional=[{"if": {"state": "active"}, "backgroundColor": ds.COLORS["tint"], "border": "none"}])
+        base.update(kwargs)
+        return dash_table.DataTable(**base)
+
+    @staticmethod
+    def index_string():
+        return (
+            "<!DOCTYPE html><html><head>{%metas%}<title>{%title%}</title>{%favicon%}{%css%}"
+            "<style>"
+            ":root{--c-bg:#0E0B24;--c-surface:#221E34;--c-border:#332E47;--c-text:#D4CEC0;"
+            "--c-ink:#E7E1D3;--c-muted:#9691A9;--c-hairline:rgba(192,163,100,.16);--c-brand:#C0A364;"
+            "--c-logo:#9691A9;--c-tint:rgba(192,163,100,.12);--c-header:#0A081C;--c-input:#1A1533;color-scheme:dark}"
+            "html,body{margin:0;background:#0E0B24;color:var(--c-text);"
+            "font-family:'Georgia Pro',Georgia,'Times New Roman',serif;font-weight:300;"
+            "-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}"
+            "td,th,input,.dash-cell,.tabular{font-feature-settings:'tnum' 1,'lnum' 1}"
+            "button:hover{filter:brightness(1.06)}"
+            "input,textarea{background:var(--c-input)!important;color:var(--c-text)!important;"
+            "border-color:var(--c-border)!important}"
+            ".dash-dropdown-trigger,.dash-dropdown-content,.dash-dropdown-option{"
+            "background:var(--c-input)!important;color:var(--c-text)!important;"
+            "border-color:var(--c-border)!important;font-family:" + ds.FONT["family"] + "!important}"
+            "</style></head><body>{%app_entry%}<footer>{%config%}{%scripts%}{%renderer%}</footer></body></html>")
+
 
 def _project_root() -> Path:
+    if os.environ.get("NAD_ROOT"):
+        return Path(os.environ["NAD_ROOT"])
     here = Path(__file__).resolve()
     for base in [here.parent, *here.parents]:
-        if (base / "3_env" / "designs.py").exists() or (base / "0_tradingVE").is_dir():
+        if (base / "3_env").is_dir() or (base / "0_tradingVE").is_dir():
             return base
-    return Path(r"S:\benjaminSuermann")
+    return here.parent
+
+
+def _first_file(*cands):
+    for c in cands:
+        if c and Path(c).is_file():
+            return Path(c)
+    return None
 
 
 ROOT = _project_root()
 HERE = Path(__file__).resolve().parent
-for _p in (str(ROOT / "3_env"), str(HERE)):
-    sys.path.insert(0, _p)
-import designs as ds
+
+
+def _logo_uri():
+    f = _first_file(os.environ.get("NAD_LOGO"), HERE / "ndxLogo.webp", ROOT / "3_env" / "ndxLogo.webp")
+    return "data:image/webp;base64," + base64.b64encode(f.read_bytes()).decode() if f else None
+
+
+LOGO_URI = _logo_uri()
+
+
+def brand_logo(h=40):
+    if LOGO_URI:
+        return html.Img(src=LOGO_URI, alt="nordIX",
+                        style={"height": f"{h}px", "width": "auto", "display": "block"})
+    return ds.logo(h + 6)
+
 
 COL = {
     "bonds": {"id": "id", "nom": "nominal", "mv": ("market value", "value"),
@@ -41,7 +247,9 @@ COL = {
               "px5d": "5d px change", "px1m": "1m px change",
               "sp30": "30d i spread", "sp120": "120d i spread", "basis": " cds basis",
               "d2e": "debt to ebitda", "fcf": "fcf to total debt", "coupon": "coupon ",
-              "quick": "quick ratio", "fcov": "fixed charge cov ratio"},
+              "quick": "quick ratio", "fcov": "fixed charge cov ratio",
+              "cpntype": ("cpn type", "coupon type", "cpn typ", "fix/flt", "fixed/floating"),
+              "sdur": ("spread duration", "oas duration", "risk duration", "oad")},
     "cds":   {"id": "id", "nom": "nominal", "mv": "market value", "dur": "duration",
               "cs01": "dv01", "spread": " cds par spread", "sector": " sector",
               "issuer": "ultimate parent", "rating": "rating", "ccy": "currency",
@@ -56,7 +264,7 @@ COL = {
               "px": ("Preis / Rate", "preis"), "typ": "Typ"},
 }
 NUM = {"nom", "mv", "dur", "dv01", "dts", "spread", "oas", "spd", "mat", "conv",
-       "px5d", "px1m", "sp30", "sp120", "basis", "d2e", "fcf", "coupon",
+       "px5d", "px1m", "sp30", "sp120", "basis", "d2e", "fcf", "coupon", "sdur",
        "cs01", "bpv", "pay", "rec", "n", "px", "quick", "fcov", "npv", "npv_t1"}
 DATE_AS_TEXT = {("swaps", "mat"), ("fx", "settle")}
 
@@ -67,7 +275,9 @@ RATING_ORDER = ["AAA", "AA+", "AA", "AA-", "A+", "A", "A-", "BBB+", "BBB", "BBB-
                 "BB+", "BB", "BB-", "NR"]
 
 
-def _bucket(y: float) -> str:
+def _bucket(y: float):
+    if pd.isna(y):
+        return np.nan
     for lo, hi, lbl in MAT_BUCKETS:
         if lo <= y < hi:
             return lbl
@@ -114,16 +324,15 @@ def load(raw: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
         d[sheet] = out
 
     b = d["bonds"].dropna(subset=["mv"]).copy()
-    b["dv01"] = b["dv01"].fillna(b["dur"] * b["mv"] / 1e4)
-    b["cs01"] = (b["dur"] * b["mv"] / 1e4).where(b["dur"].notna(), b["dv01"])
+    dvd = b["dur"] * b["mv"] / 1e4
+    b["dv01"] = b["dv01"].fillna(dvd)
+    b["flt"] = b["cpntype"].astype(str).str.contains("float|variab|vrn|frn", case=False, na=False)
+    sdur = b["sdur"] if b["sdur"].notna().any() else b["dur"]
+    b["cs01"] = (sdur * b["mv"] / 1e4).where(sdur.notna(), b["dv01"])
     b["bucket"] = b["mat"].apply(_bucket)
-    b["dsp30"] = b["sp30"]
-    b["dsp120"] = b["sp120"]
 
     c = d["cds"].dropna(subset=["nom"]).copy()
     c["bucket"] = c["mat"].fillna(0).apply(_bucket)
-    c["dsp30"] = c["sp30"]
-    c["dsp120"] = c["sp120"]
 
     s = d["swaps"].dropna(subset=["bpv"]).copy()
     s["mat_y"] = (pd.to_datetime(s["mat"], format="%d.%m.%Y", errors="coerce")
@@ -137,10 +346,16 @@ def load(raw: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
     return d
 
 
+def _wavg(v, w) -> float:
+    v = pd.to_numeric(v, errors="coerce")
+    ok = v.notna() & w.notna()
+    tw = w[ok].sum()
+    return float((v[ok] * w[ok]).sum() / tw) if tw else 0.0
+
+
 def metrics(d: dict[str, pd.DataFrame]) -> dict:
     b, c, s, f = d["bonds"], d["cds"], d["swaps"], d["futures"]
     mv = b["mv"].sum()
-    w = b["mv"] / mv
     ir_long = b["dv01"].sum() + f.loc[f["dv01"] > 0, "dv01"].sum()
     ir_hedge = s["bpv"].sum() + f.loc[f["dv01"] < 0, "dv01"].sum()
     cw = c.dropna(subset=["spread", "nom"])
@@ -152,14 +367,14 @@ def metrics(d: dict[str, pd.DataFrame]) -> dict:
         hedge_ratio=-ir_hedge / ir_long if ir_long else 0.0,
         cs01=b["cs01"].sum() + c["cs01"].sum(),
         cs01_bonds=b["cs01"].sum(), cs01_cds=c["cs01"].sum(),
-        dur_net=float((ir_long + ir_hedge) / mv * 1e4),
-        spread_avg=float((b["spread"] * w).sum()),
-        oas_avg=float((b["oas"] * w).sum()),
-        dts=float((b["dts"] * w).sum()),
-        wam=float((b["mat"] * w).sum()),
-        conv=float((b["conv"] * w).sum()),
-        coupon=float((b["coupon"] * w).sum()) * 100,
-        spd=float((b["spd"] * w).sum()),
+        dur_net=float((ir_long + ir_hedge) / mv * 1e4) if mv else 0.0,
+        spread_avg=_wavg(b["spread"], b["mv"]),
+        oas_avg=_wavg(b["oas"], b["mv"]),
+        dts=_wavg(b["dts"], b["mv"]),
+        wam=_wavg(b["mat"], b["mv"]),
+        conv=_wavg(b["conv"], b["mv"]),
+        coupon=_wavg(b["coupon"], b["mv"]) * 100,
+        spd=_wavg(b["spd"], b["mv"]),
         spread_mv=float((b["spread"] * b["mv"]).sum()),
         cds_prem=float((c["spread"] * c["nom"]).sum()),
         cds_spread_avg=cds_spread_avg,
@@ -341,6 +556,28 @@ def avg_rating(b: pd.DataFrame) -> str:
     return RATING_ORDER[min(len(RATING_ORDER) - 1, max(0, round(avg)))]
 
 
+RATING_LINEAR = ["AAA", "AA+", "AA", "AA-", "A+", "A", "A-", "BBB+", "BBB", "BBB-",
+                 "BB+", "BB", "BB-", "B+", "B", "B-", "CCC+", "CCC", "CCC-", "CC", "C"]
+RATING_SCORE = {r: i + 1 for i, r in enumerate(RATING_LINEAR)}
+RATING_SCORE.update({"D": 21, "SD": 21, "DDD": 21, "DD": 21})
+
+
+def portfolio_rating(d: dict[str, pd.DataFrame]) -> tuple[float | None, str]:
+    num = den = 0.0
+    for df, wcol in ((d["bonds"], "mv"), (d["cds"], "nom")):
+        if not len(df):
+            continue
+        s = df["rating"].astype(str).str.strip().str.upper().map(RATING_SCORE)
+        w = df[wcol]
+        ok = s.notna() & w.notna()
+        num += float((s[ok] * w[ok]).sum())
+        den += float(w[ok].sum())
+    if den <= 0:
+        return None, "NR"
+    avg = num / den
+    return avg, RATING_LINEAR[min(len(RATING_LINEAR) - 1, max(0, round(avg) - 1))]
+
+
 def _with_total(out: pd.DataFrame, name: str) -> pd.DataFrame:
     tot = {name: "Σ Total", "Sovereign": round(out["Sovereign"].sum(), 2),
            "Credit": round(out["Credit"].sum(), 2), "Total": round(out["Total"].sum(), 2)}
@@ -424,8 +661,12 @@ PORTFOLIO_DIR = ROOT / "0_tradingVE" / "0_portfolios"
 
 
 def _resolve_xlsx(name: str) -> str:
-    p = Path(name)
-    return str(p if p.is_file() else PORTFOLIO_DIR / p.name)
+    hit = _first_file(
+        os.environ.get("NAD_XLSX"),
+        name if Path(name).is_absolute() else None,
+        HERE / name, HERE / "data" / name, Path.cwd() / name,
+        PORTFOLIO_DIR / Path(name).name)
+    return str(hit or (HERE / Path(name).name))
 
 
 XLSX = _resolve_xlsx(sys.argv[1] if len(sys.argv) > 1 else "nad.xlsx")
@@ -436,10 +677,10 @@ def _empty_book() -> dict[str, pd.DataFrame]:
     schema = {
         "bonds": ["id", "mv", "dv01", "dur", "cs01", "dts", "spread", "oas", "conv", "mat",
                   "coupon", "spd", "ccy", "nom", "sector", "issuer", "rating", "seg", "rank",
-                  "bucket", "dsp30", "dsp120", "px5d", "px1m", "sp30", "sp120", "basis",
+                  "bucket", "px5d", "px1m", "sp30", "sp120", "basis",
                   "d2e", "fcf", "quick", "fcov", "country", "industry"],
         "cds": ["id", "nom", "mv", "cs01", "dur", "sector", "issuer", "rating", "ccy", "mat",
-                "bucket", "dsp30", "dsp120", "spread", "spd", "sp30", "sp120", "px5d", "px1m"],
+                "bucket", "spread", "spd", "sp30", "sp120", "px5d", "px1m"],
         "swaps": ["id", "bpv", "nom", "mat", "mat_y", "bucket", "pay", "rec", "ccy"],
         "futures": ["id", "dv01", "dur", "bucket", "ccy"],
         "fx": ["id", "name", "ccy"],
@@ -455,11 +696,11 @@ try:
     D = load(RAW)
     PORTFOLIO_OK, PORTFOLIO_ERR = True, ""
 except Exception as _pf_ex:
-    import traceback as _tb
-    _tb.print_exc()
+    traceback.print_exc()
     D, PORTFOLIO_OK, PORTFOLIO_ERR = _empty_book(), False, str(_pf_ex)
 
 M = metrics(D)
+M["rating_score"], M["rating_letter"] = portfolio_rating(D)
 B = D["bonds"]
 
 FACTS = fund_facts(RAW0)
@@ -468,19 +709,16 @@ if pd.isna(NAV) or NAV == 0:
     NAV = 1.0
 CASH = FACTS.get("cash")
 
-# All durations normalised to NAV = the fund's own price sensitivity (incl. cash drag).
-M["dur_spread"] = M["cs01"] / NAV * 1e4        # fund spread duration, bonds + CDS
-M["dur_net"] = M["ir_net"] / NAV * 1e4         # fund net rate duration, after hedges
-M["dur_rate_gross"] = M["ir_long"] / NAV * 1e4
+M["dur_spread"] = M["cs01"] / NAV * 1e4
+M["dur_net"] = M["ir_net"] / NAV * 1e4
 
 CURVES = load_curves(RAW0)
 
 POS = positions(D)
 POS_VIEW = POS.assign(**{"Nom(M)": POS["Nominal"] / 1e6, "MV(M)": POS["MV"] / 1e6}).round(
-    {"Mat": 1, "Nom(M)": 2, "MV(M)": 2, "Dur": 2, "DV01/BPV": 0, "Spread": 0})
-POS_COLS = ["Type", "id", "Name", "Sector", "Rtg", "Ccy", "Mat", "Nom(M)", "MV(M)",
+    {"Mat": 1, "Nom(M)": 1, "MV(M)": 1, "Dur": 2, "DV01/BPV": 0, "Spread": 0})
+POS_COLS = ["MV(M)", "Type", "id", "Name", "Sector", "Rtg", "Ccy", "Mat", "Nom(M)",
             "Dur", "DV01/BPV", "Spread"]
-TOP10_COLS = ["Type", "Name", "Sector", "Rtg", "Ccy", "MV(M)", "Dur", "Spread"]
 FILTER_STYLE = {"backgroundColor": ds.COLORS["background"], "color": ds.COLORS["text"],
                 "fontFamily": ds.FONT["numeric"], "fontSize": "12px",
                 "borderBottom": f"1px solid {ds.COLORS['hairline']}"}
@@ -515,7 +753,7 @@ PNL_COND = ([{"if": {"filter_query": f"{{{n}}} < 0", "column_id": c},
 RISK = risk_limits(D, M)
 
 FUND = fundamental_screen(D).round(
-    {"MV(M)": 2, "ND/EBITDA": 2, "FCF/Debt": 3, "Quick": 2, "FCC": 2})
+    {"MV(M)": 1, "ND/EBITDA": 2, "FCF/Debt": 3, "Quick": 2, "FCC": 2})
 FUND_COLS = ["Issuer", "Sector", "Rtg", "MV(M)", "ND/EBITDA", "FCF/Debt", "Quick", "FCC", "Flags"]
 FUND_COND = [{"if": {"filter_query": q, "column_id": c}, "color": ds.COLORS["negative"]}
              for q, c in [("{ND/EBITDA} > 5", "ND/EBITDA"), ("{FCF/Debt} < 0", "FCF/Debt"),
@@ -527,24 +765,47 @@ SECTORS = sorted(set(B["sector"].dropna()) | set(D["cds"]["sector"].dropna()))
 SECTOR_COLOR = {s: ds.CHART_PALETTE[i % len(ds.CHART_PALETTE)] for i, s in enumerate(SECTORS)}
 DIVERGING = [[0, ds.HEX["negative"]], [0.5, ds.HEX["surface"]], [1, ds.HEX["positive"]]]
 SEQUENTIAL = [[0, ds.HEX["surface"]], [1, ds.HEX["primary"]]]
+CREDIT_VIEWS = {s: credit_view(D, s) for s in CREDIT_SRC}
+_hs_full = CREDIT_VIEWS["Bond + CDS"].dropna(subset=["sector"])
+HOTSPOT_SECTORS = list(_hs_full.assign(_a=_hs_full["cs01"].abs())
+                       .groupby("sector")["_a"].sum().sort_values(ascending=False).index)
+
+
+def _accent_rule(ac):
+    return html.Div(style={"width": "30px", "height": "2px", "margin": "0 auto 13px",
+                           "background": f"linear-gradient(90deg,rgba(192,163,100,0),{ac},rgba(192,163,100,0))",
+                           "boxShadow": "0 0 8px rgba(192,163,100,.4)"})
+
+
+def _stat_card(children, minw):
+    return html.Div(children, className="stat-card", style={**ds.CARD_STYLE, "flex": "1", "minWidth": minw,
+              "padding": "22px 22px 24px", "textAlign": "center", "position": "relative",
+              "transition": "box-shadow .2s ease, transform .2s ease"})
+
+
+def _stat_value(value, size):
+    return html.Div(value, style={"fontFamily": ds.FONT["numeric"], "fontWeight": 400, "fontSize": size,
+                                  "color": ds.COLORS["ink"], "marginTop": "10px", "lineHeight": 1.12,
+                                  "letterSpacing": "0.3px", "fontVariantNumeric": "tabular-nums lining-nums"})
+
+
+def _stat_label(label):
+    return html.Div(label, style={**ds.LABEL_STYLE, "fontSize": "12px", "letterSpacing": "1.3px",
+                                  "color": ds.COLORS["muted"]})
 
 
 def stat(label: str, value: str, sub: str = "", accent: str | None = None):
     ac = accent or ds.COLORS["primary"]
-    body = [
-        html.Div(label, style=ds.LABEL_STYLE),
-        html.Div(value, style={"fontFamily": ds.FONT.get("numeric", ds.FONT["family"]),
-                               "fontWeight": 500, "fontSize": "26px", "color": ds.COLORS["text"],
-                               "marginTop": "7px", "lineHeight": 1.05, "letterSpacing": "-0.02em",
-                               "fontVariantNumeric": "tabular-nums"}),
-        html.Div(sub, style={**ds.LABEL_STYLE, "textTransform": "none",
-                             "letterSpacing": 0, "marginTop": "6px", "opacity": 0.9}),
-    ]
-    return html.Div(body, className="stat-card", style={**ds.CARD_STYLE, "flex": "1", "minWidth": "158px",
-              "padding": "15px 17px", "position": "relative",
-              "borderLeft": f"3px solid {ac}",
-              "boxShadow": "0 1px 2px rgba(16,24,40,0.04), 0 1px 3px rgba(16,24,40,0.05)",
-              "transition": "box-shadow .18s ease, transform .18s ease"})
+    kids = [_accent_rule(ac), _stat_label(label), _stat_value(value, "26px")]
+    if sub:
+        kids.append(html.Div(sub, style={**ds.LABEL_STYLE, "textTransform": "none", "letterSpacing": "0.2px",
+                                         "marginTop": "8px", "opacity": 0.85, "fontSize": "11.5px"}))
+    return _stat_card(kids, "158px")
+
+
+def stat_plain(label: str, value: str, accent: str | None = None):
+    ac = accent or ds.COLORS["primary"]
+    return _stat_card([_accent_rule(ac), _stat_label(label), _stat_value(value, "31px")], "170px")
 
 
 def chart(fig, cid: str):
@@ -555,17 +816,26 @@ def legend_right(fig):
     return fig.update_layout(legend=dict(orientation="h", y=1.14, x=1, xanchor="right"))
 
 
-TAB_STYLE = {"fontFamily": ds.FONT["family"], "fontSize": "13px", "padding": "9px 18px",
-             "background": ds.COLORS["surface"], "border": f"1px solid {ds.COLORS['border']}",
-             "color": ds.COLORS["text"]}
-TAB_SELECTED = {**TAB_STYLE, "background": ds.COLORS["primary"], "color": "#FFF",
-                "borderColor": ds.COLORS["primary"], "fontWeight": 600}
+TAB_BORDER = "1px solid rgba(192,163,100,.32)"
+TAB_GLOSS = "inset 0 1px 0 rgba(255,255,255,.06), 0 1px 3px rgba(0,0,0,.30)"
+TOPTAB_STYLE = {"fontFamily": ds.FONT["serif"], "fontSize": "17px", "fontWeight": 500,
+                "padding": "11px 32px", "minWidth": "150px", "textAlign": "center", "textTransform": "lowercase",
+                "background": "linear-gradient(180deg,#262238,#1D1A2E)", "borderRadius": "8px",
+                "border": TAB_BORDER, "color": ds.COLORS["text"],
+                "letterSpacing": "0.3px", "boxShadow": TAB_GLOSS}
+TOPTAB_SELECTED = dict(TOPTAB_STYLE)
 
-TOPTAB_STYLE = {"fontFamily": ds.FONT["family"], "fontSize": "15px", "fontWeight": 600,
-                "padding": "12px 28px", "background": ds.COLORS["background"], "border": "none",
-                "borderBottom": f"2px solid {ds.COLORS['border']}", "color": ds.COLORS["secondary"]}
-TOPTAB_SELECTED = {**TOPTAB_STYLE, "color": ds.COLORS["primary"],
-                   "borderBottom": f"3px solid {ds.COLORS['primary']}"}
+TAB_STYLE = {"fontFamily": ds.FONT["serif"], "fontSize": "15px", "fontWeight": 500,
+             "padding": "8px 24px", "minWidth": "118px", "textAlign": "center", "textTransform": "lowercase",
+             "background": "linear-gradient(180deg,#262238,#1D1A2E)", "borderRadius": "8px",
+             "border": TAB_BORDER, "color": ds.COLORS["text"], "boxShadow": TAB_GLOSS}
+TAB_SELECTED = dict(TAB_STYLE)
+
+TAB_COLORS = {"border": "transparent", "background": "transparent", "primary": "transparent"}
+TOPTABS_ROW = {"display": "flex", "flexWrap": "wrap", "gap": "16px", "justifyContent": "center",
+               "border": "none", "margin": "18px 0 6px"}
+SUBTABS_ROW = {"display": "flex", "flexWrap": "wrap", "gap": "12px", "justifyContent": "center",
+               "border": "none", "margin": "18px 0 6px"}
 
 
 def fmt(v: float, dec: int = 0) -> str:
@@ -578,8 +848,6 @@ def fig_ladder_ir():
     for col, color in [("Bonds", ds.HEX["primary"]), ("Swaps", ds.HEX["negative"]),
                        ("Futures", ds.HEX["highlight"])]:
         fig.add_bar(name=col, x=L.index, y=L[col], marker_color=color)
-    fig.add_scatter(name="Net", x=L.index, y=L["Netto"], mode="lines+markers",
-                    line=dict(color=ds.HEX["text"], width=2.5), marker=dict(size=8))
     fig.update_layout(barmode="relative")
     return legend_right(ds.style_figure(fig, height=400, legend=True))
 
@@ -614,8 +882,8 @@ CMAP_AXES = {
     "OAS (bp)":           ("oas",    ".0f", False),
     "DTS (y·bp)":         ("dts",    ".0f", False),
     "Carry Eff. (bp/y)":  ("spd",    ".1f", False),
-    "Δ Spread 30d (bp)":  ("dsp30",  "+.0f", True),
-    "Δ Spread 120d (bp)": ("dsp120", "+.0f", True),
+    "Δ Spread 30d (bp)":  ("sp30",  "+.0f", True),
+    "Δ Spread 120d (bp)": ("sp120", "+.0f", True),
     "CDS Basis (bp)":     ("basis",  "+.0f", True),
 }
 
@@ -643,8 +911,8 @@ def fig_credit_map(cdf, xkey="Duration (y)", ykey="I-Spread (bp)"):
 
 
 def fig_heatmap(cdf):
-    p = cdf.pivot_table(values="cs01", index="sector", columns="bucket",
-                        aggfunc="sum").reindex(columns=BUCKET_LABELS)
+    p = (cdf.pivot_table(values="cs01", index="sector", columns="bucket", aggfunc="sum")
+         .reindex(index=HOTSPOT_SECTORS, columns=BUCKET_LABELS))
     fig = go.Figure(go.Heatmap(
         z=p.values, x=p.columns, y=p.index, colorscale=SEQUENTIAL, showscale=False,
         text=np.where(np.isnan(p.values), "",
@@ -656,19 +924,18 @@ def fig_heatmap(cdf):
 
 
 def fig_swapbook():
+    fig = go.Figure()
     s = D["swaps"].sort_values("mat_y")
-    fig = go.Figure(go.Bar(
-        x=s["mat_y"], y=s["bpv"], width=0.35, marker_color=ds.HEX["negative"],
-        customdata=np.stack([s["nom"] / 1e6, s["pay"], s["rec"]], axis=-1),
-        hovertemplate="%{x:.1f}y · BPV %{y:,.0f} €/bp · %{customdata[0]:.0f}M<br>"
-                      "Pay %{customdata[1]:.2f}% / Rec %{customdata[2]:.2f}%<extra></extra>"))
-    fig = ds.style_figure(fig, height=340)
-    return ds.axisTitles(fig.update_layout(hovermode="closest"), "Time to maturity (y)")
-
-
-FV_MATBUCKETS = [("≤5y", "circle", ds.HEX["positive"]),
-                 ("5–10y", "square", ds.HEX["primary"]),
-                 (">10y", "diamond", ds.HEX["secondary"])]
+    fig.add_bar(name="Swaps", x=s["mat_y"], y=s["bpv"], width=0.35, marker_color=ds.HEX["negative"],
+                customdata=np.stack([s["nom"] / 1e6, s["pay"], s["rec"]], axis=-1) if len(s) else None,
+                hovertemplate="Swap · %{x:.1f}y · BPV %{y:,.0f} €/bp · %{customdata[0]:.0f}M<br>"
+                              "Pay %{customdata[1]:.2f}% / Rec %{customdata[2]:.2f}%<extra></extra>")
+    f = D["futures"].sort_values("dur") if len(D["futures"]) else D["futures"]
+    fig.add_bar(name="Futures", x=f.get("dur", []), y=f.get("dv01", []), width=0.35,
+                marker_color=ds.HEX["highlight"],
+                hovertemplate="Future · %{x:.1f}y · DV01 %{y:,.0f} €/bp<extra></extra>")
+    fig = ds.style_figure(fig, height=340, legend=True)
+    return ds.axisTitles(fig.update_layout(hovermode="closest", barmode="overlay"), "Time to maturity (y)")
 
 
 def _fv_group(mat):
@@ -681,39 +948,44 @@ def fig_fair_value(cdf):
     d["notch"] = d["rating"].astype(str).str.strip().str.upper().map(m)
     d = d.dropna(subset=["notch"])
     if not len(d):
-        return _empty_fig("No rated positions with a spread.", 440)
+        return _empty_fig("No rated positions with a spread.", 460)
     d["mgrp"] = d["mat"].map(_fv_group)
-    d["fair"] = np.nan
-    fig = go.Figure()
-    for name, _sym, shade in FV_MATBUCKETS:
-        g = d[d["mgrp"] == name]
-        if not len(g):
-            continue
-        med = g.groupby("notch")["spread"].median().sort_index()
-        d.loc[g.index, "fair"] = g["notch"].map(med).values
-        fig.add_scatter(x=med.index, y=med.values, mode="lines", name=f"Fair {name}",
-                        line=dict(color=shade, width=1.8, dash="dot"), hoverinfo="skip")
+    d["fair"] = d.groupby(["mgrp", "notch"])["spread"].transform("median")
     d["resid"] = d["spread"] - d["fair"]
-    for name, sym, _shade in FV_MATBUCKETS:
-        g = d[(d["mgrp"] == name) & d["resid"].notna()]
+    d["maty"] = np.log10(d["mat"].clip(lower=0.1))
+    cheap = d["resid"] >= 0
+    fig = go.Figure()
+    for g, nm, col in [(d[cheap], "Cheap (buy)", ds.HEX["positive"]),
+                       (d[~cheap], "Rich (trim)", ds.HEX["negative"])]:
         if not len(g):
             continue
-        colors = [ds.HEX["positive"] if r >= 0 else ds.HEX["negative"] for r in g["resid"]]
-        fig.add_scatter(x=g["notch"], y=g["spread"], mode="markers", showlegend=False,
+        fig.add_trace(go.Scatter3d(
+            x=g["notch"], y=g["maty"], z=g["spread"], mode="markers", name=nm,
             text=g["issuer"], customdata=np.stack([g["rating"], g["resid"], g["mat"]], axis=-1),
-            marker=dict(size=_bubble(g["mv"]), sizemin=4, color=colors, symbol=sym,
-                        line=dict(width=1, color="#FFF"), opacity=0.9),
-            hovertemplate="<b>%{text}</b> (%{customdata[0]}, %{customdata[2]:.1f}y)<br>"
-                          "Spread %{y:.0f}bp · %{customdata[1]:+.0f}bp vs fair<extra></extra>")
-    for nm, col in [("Cheap (buy)", ds.HEX["positive"]), ("Rich (trim)", ds.HEX["negative"])]:
-        fig.add_scatter(x=[None], y=[None], mode="markers", name=nm,
-                        marker=dict(size=10, color=col, symbol="circle"))
+            marker=dict(size=np.clip(np.asarray(_bubble(g["mv"]), float), 4, 20),
+                        color=col, opacity=0.85, line=dict(width=0.5, color="#FFF")),
+            hovertemplate="<b>%{text}</b> (%{customdata[0]})<br>"
+                          "%{customdata[2]:.1f}y · Spread %{z:.0f}bp · %{customdata[1]:+.0f}bp vs fair<extra></extra>"))
     ticks = sorted(int(i) for i in d["notch"].dropna().unique())
-    fig = ds.style_figure(fig, height=440, legend=True)
-    fig.update_layout(hovermode="closest",
-        xaxis=dict(tickmode="array", tickvals=ticks, ticktext=[RATING_ORDER[i] for i in ticks]))
-    ds.axisTitles(fig, "Rating", "I-Spread (bp)")
-    return legend_right(fig)
+    lo, hi = float(d["mat"].min()), float(d["mat"].max())
+    yr = [t for t in (1, 2, 3, 5, 7, 10, 15, 20, 30, 40, 50) if lo * 0.9 <= t <= hi * 1.1]
+    yr = yr or sorted({max(0.1, round(lo, 1)), round(hi, 1)})
+    ax = dict(backgroundcolor=ds.HEX["surface"], gridcolor=ds.HEX["hairline"],
+              zerolinecolor=ds.HEX["border"], color=ds.HEX["muted"], showbackground=True)
+    fig.update_layout(
+        height=460, paper_bgcolor=ds.HEX["surface"], plot_bgcolor=ds.HEX["surface"],
+        font=dict(family=ds.FONT["family"], size=11, color=ds.HEX["text"]),
+        margin=dict(t=6, b=6, l=6, r=6), hovermode="closest",
+        legend=dict(orientation="h", y=1.02, x=0, bgcolor="rgba(0,0,0,0)", font=dict(size=12)),
+        scene=dict(
+            xaxis=dict(title="Rating", tickmode="array", tickvals=ticks,
+                       ticktext=[RATING_ORDER[i] for i in ticks], **ax),
+            yaxis=dict(title="Maturity (y)", tickmode="array",
+                       tickvals=[float(np.log10(t)) for t in yr],
+                       ticktext=[f"{t:g}" for t in yr], **ax),
+            zaxis=dict(title="I-Spread (bp)", **ax),
+            camera=dict(eye=dict(x=1.7, y=1.6, z=0.8))))
+    return fig
 
 
 def fig_carry_risk():
@@ -747,6 +1019,8 @@ def fig_dts_concentration():
         return _empty_fig("No DTS data.", 470)
     share = (d.assign(c=d["dts"] * d["mv"]).groupby("issuer")["c"].sum()
              .sort_values(ascending=False))
+    if not share.sum():
+        return _empty_fig("No DTS data.", 470)
     share = share / share.sum()
     n = len(share)
     x = np.concatenate([[0], np.arange(1, n + 1) / n * 100])
@@ -754,8 +1028,10 @@ def fig_dts_concentration():
     hhi = float((share ** 2).sum() * 1e4)
     top5 = float(share.head(5).sum() * 100)
     fig = go.Figure()
-    fig.add_scatter(x=[0, 100], y=[0, 100], mode="lines", hoverinfo="skip",
-                    line=dict(color=ds.HEX["border"], width=1, dash="dot"))
+    fig.add_scatter(x=[0, 100], y=[0, 100], mode="lines", name="neutral (equal)", hoverinfo="skip",
+                    line=dict(color=ds.HEX["muted"], width=1.5, dash="dash"))
+    fig.add_annotation(x=88, y=92, xanchor="right", yanchor="bottom", showarrow=False, textangle=-45,
+                       text="neutral 45°", font=dict(family=ds.FONT["family"], size=11, color=ds.HEX["muted"]))
     fig.add_scatter(x=x, y=cum, mode="lines", fill="tozeroy", fillcolor="rgba(33,88,128,.10)",
                     line=dict(color=ds.HEX["primary"], width=2.5),
                     hovertemplate="Top %{x:.0f}% of names · %{y:.0f}% of DTS<extra></extra>")
@@ -769,25 +1045,32 @@ def fig_dts_concentration():
 
 def fig_fx_exposure():
     d = B.dropna(subset=["mv"])
-    g = (d[d["ccy"].astype(str).str.upper() != "EUR"].groupby("ccy")["mv"].sum()
-         / NAV * 100).sort_values(ascending=False)
-    if not len(g):
+    ex = (d[d["ccy"].astype(str).str.upper() != "EUR"].groupby("ccy")["mv"].sum()
+          / NAV * 100).sort_values(ascending=False)
+    if not len(ex):
         return _empty_fig("100% EUR — no FX exposure.", 260)
-    fig = go.Figure(go.Bar(
-        x=g.values, y=g.index, orientation="h", marker_color=ds.HEX["secondary"],
-        text=[f"{v:.2f}%" for v in g.values], textposition="outside",
-        hovertemplate="%{y}: %{x:.2f}% of NAV<extra></extra>"))
-    fig.add_vline(x=5, line=dict(color=ds.HEX["negative"], width=1.5, dash="dash"))
-    fig.add_annotation(x=5, y=1, yref="y domain", yanchor="bottom", xanchor="left",
-        text=" 5% limit", showarrow=False,
+    hedged_ccy = set(D["fx"]["ccy"].astype(str).str.upper()) if len(D["fx"]) else set()
+    hedged = [0.0 if str(c).upper() in hedged_ccy else float(v) for c, v in ex.items()]
+    fig = go.Figure()
+    fig.add_bar(name="Unhedged", x=list(ex.index), y=list(ex.values), marker_color=ds.HEX["secondary"],
+                text=[f"{v:.2f}%" for v in ex.values], textposition="outside",
+                hovertemplate="%{x}: %{y:.2f}% of NAV — unhedged<extra></extra>")
+    fig.add_bar(name="Hedged (after FX swaps)", x=list(ex.index), y=hedged, marker_color=ds.HEX["primary"],
+                text=[f"{v:.2f}%" for v in hedged], textposition="outside",
+                hovertemplate="%{x}: %{y:.2f}% of NAV — after hedges<extra></extra>")
+    fig.add_hline(y=5, line=dict(color=ds.HEX["negative"], width=1.5, dash="dash"))
+    fig.add_annotation(x=1, y=5, xref="x domain", xanchor="right", yanchor="bottom",
+        text="5% limit ", showarrow=False,
         font=dict(size=10, color=ds.HEX["negative"], family=ds.FONT["family"]))
-    fig = ds.style_figure(fig, height=max(220, 70 + 34 * len(g)))
-    fig.update_layout(hovermode="closest", margin=dict(t=20, b=30, l=8, r=64))
-    return ds.axisTitles(fig, "% of NAV")
+    fig = ds.style_figure(fig, height=340, legend=True)
+    fig.update_layout(barmode="group", hovermode="x unified", margin=dict(t=30, b=30, l=8, r=20))
+    return ds.axisTitles(fig, None, "% of NAV")
 
 
 def fig_carry_treemap():
-    b = B.dropna(subset=["spd"]).assign(w=lambda x: x["spd"] * x["mv"])
+    b = B.dropna(subset=["spd", "mv"]).assign(w=lambda x: x["spd"] * x["mv"])
+    if not len(b) or not b["mv"].sum():
+        return _empty_fig("No carry data.")
     g = (b.groupby(["sector", "issuer"], as_index=False)
            .agg(mv=("mv", "sum"), w=("w", "sum")))
     g["spd"] = g["w"] / g["mv"]
@@ -838,12 +1121,14 @@ _BUCKET_MID = {lbl: (lo + hi) / 2 if hi < 90 else lo + 3 for lo, hi, lbl in MAT_
 
 def _spread_term(df: pd.DataFrame, col: str) -> pd.Series:
     d = df.dropna(subset=[col, "mv"])
+    if not len(d):
+        return pd.Series(dtype=float)
     return (d.groupby("bucket").apply(lambda x: np.average(x[col], weights=x["mv"]),
             include_groups=False).reindex(BUCKET_LABELS).dropna())
 
 
 def fig_spread_terms():
-    isp, oas = _spread_term(B, "spread"), _spread_term(B, "oas")
+    isp, oas, carry = _spread_term(B, "spread"), _spread_term(B, "oas"), _spread_term(B, "spd")
     fig = go.Figure()
     fig.add_scatter(x=list(isp.index), y=isp.values, mode="lines+markers", name="I-Spread",
                     line=dict(color=ds.HEX["primary"], width=2.5), marker=dict(size=8),
@@ -851,9 +1136,12 @@ def fig_spread_terms():
     fig.add_scatter(x=list(oas.index), y=oas.values, mode="lines+markers", name="OAS",
                     line=dict(color=ds.HEX["secondary"], width=2.5), marker=dict(size=8),
                     hovertemplate="%{x}: OAS %{y:.0f} bp<extra></extra>")
+    fig.add_scatter(x=list(carry.index), y=carry.values, mode="lines+markers", name="Carry / y",
+                    line=dict(color=ds.HEX["positive"], width=2.5, dash="dot"), marker=dict(size=7),
+                    hovertemplate="%{x}: Carry %{y:.1f} bp/y<extra></extra>")
     fig = ds.style_figure(fig, height=440, legend=True)
     fig.update_layout(hovermode="x unified")
-    ds.axisTitles(fig, "Maturity bucket", "Spread (bp)")
+    ds.axisTitles(fig, "Maturity bucket", "Spread (bp) · Carry (bp/y)")
     return legend_right(fig)
 
 
@@ -894,159 +1182,53 @@ FIGS = {
     "fair_value": lambda: fig_fair_value(B), "carry_risk": fig_carry_risk,
     "dts_concentration": fig_dts_concentration,
 }
-FIGS = {k: fn() for k, fn in FIGS.items()}
+def _safe_fig(fn):
+    try:
+        return fn()
+    except Exception:
+        traceback.print_exc()
+        return _empty_fig("Chart not available (no data).")
+
+
+FIGS = {k: _safe_fig(fn) for k, fn in FIGS.items()}
 
 
 def dropdown(cid, options, value, width="260px"):
     return dcc.Dropdown(id=cid, options=[{"label": o, "value": o} for o in options],
                         value=value, clearable=False,
-                        style={"width": width, "fontFamily": ds.FONT["family"],
-                               "fontSize": "13px"})
-
-
-def _portfolio_digest() -> str:
-    L_ir, L_cs = ladder(D, "ir").round(0), ladder(D, "cs").round(0)
-    sec = (B.groupby("sector")
-             .agg(mv_Mio=("mv", lambda x: x.sum() / 1e6), dv01=("dv01", "sum"),
-                  cs01=("cs01", "sum"), spread=("spread", "mean"))
-             .round(1).sort_values("cs01", ascending=False))
-    cols = ["issuer", "sector", "rating", "ccy", "mat", "mv", "dur", "dv01",
-            "cs01", "spread", "spd", "dsp30", "dsp120", "conv", "basis"]
-    pos = B[cols].copy()
-    pos["mv"] = (pos["mv"] / 1e6).round(2)
-    pos = pos.round({"mat": 1, "dur": 2, "dv01": 0, "cs01": 0, "spread": 0,
-                     "spd": 1, "dsp30": 0, "dsp120": 0, "conv": 2, "basis": 0})
-    return "\n".join([
-        f"As of: {pd.Timestamp.today():%Y-%m-%d}",
-        "",
-        "== KEY FIGURES (DV01/CS01 in €/bp) ==",
-        f"Bond market value: EUR {M['mv']/1e6:.1f}m ({M['n_bonds']} positions, {M['n_swaps']} payer swaps, {M['n_cds']} CDS)",
-        f"Gross rate DV01 {M['ir_long']:.0f} | Hedge DV01 {M['ir_hedge']:.0f} | Net {M['ir_net']:.0f} | Net duration (NAV) {M['dur_net']:.2f}y | Hedge ratio {M['hedge_ratio']:.1%}",
-        f"CS01 total {M['cs01']:.0f} (bonds {M['cs01_bonds']:.0f}, CDS {M['cs01_cds']:.0f}) | Spread duration (NAV) {M['dur_spread']:.2f}y | DTS {M['dts']:.1f}",
-        f"Avg I-spread MVw {M['spread_avg']:.0f} bp | Avg OAS {M['oas_avg']:.0f} bp | Carry eff. {M['spd']:.1f} bp/y | Avg coupon {M['coupon']:.2f}%",
-        f"WAM {M['wam']:.1f}y | Convexity {M['conv']:.2f} | FX≠EUR EUR {M['fx_mv']/1e6:.1f}m ({M['fx_mv']/M['mv']:.1%})",
-        "",
-        "== RATE DV01 PER MATURITY BUCKET (€/bp) ==", L_ir.to_string(),
-        "",
-        "== SPREAD DV01 / CS01 PER MATURITY BUCKET (€/bp) ==", L_cs.to_string(),
-        "",
-        "== SECTOR EXPOSURE (mv in m, dv01/cs01 in €/bp, spread in bp) ==", sec.to_string(),
-        "",
-        "== ALL BOND POSITIONS (mv in m; dsp30/dsp120 = Δ I-spread 30/120 days in bp) ==",
-        pos.to_string(index=False),
-    ])
+                        style={"width": width, "fontFamily": ds.FONT["family"], "fontSize": "13px"})
 
 
 _client = None
 
 
+def _load_api_key():
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return
+    envf = _first_file(os.environ.get("NAD_ENV"), HERE / ".env",
+                       ROOT / "3_env" / ".env", Path.cwd() / ".env")
+    if not envf:
+        return
+    for line in envf.read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = line.strip()
+        if line.startswith("ANTHROPIC_API_KEY=") and "=" in line:
+            os.environ.setdefault("ANTHROPIC_API_KEY",
+                                  line.split("=", 1)[1].strip().strip('"').strip("'"))
+
+
 def _anthropic():
     global _client
     if _client is None:
-        import anthropic
+        try:
+            import anthropic
+        except ImportError:
+            raise RuntimeError("AI features need the 'anthropic' package — run: pip install anthropic")
+        _load_api_key()
         if not os.environ.get("ANTHROPIC_API_KEY"):
-            env = ROOT / "3_env" / ".env"
-            for line in env.read_text().splitlines():
-                if line.startswith("ANTHROPIC_API_KEY="):
-                    os.environ["ANTHROPIC_API_KEY"] = line.split("=", 1)[1].strip()
+            raise RuntimeError("ANTHROPIC_API_KEY not set — put a .env next to the script with "
+                               "ANTHROPIC_API_KEY=sk-ant-… or set it as an environment variable.")
         _client = anthropic.Anthropic()
     return _client
-
-
-def _answer_text(msg) -> str:
-    if getattr(msg, "stop_reason", "") == "refusal":
-        return "The request was declined by the model."
-    return "".join(b.text for b in msg.content if b.type == "text").strip() or "_(no answer)_"
-
-
-COPILOT_SYSTEM = (
-    "You are the portfolio copilot for the nordIX Interest Rate Hedged Bond Fund — a precise, "
-    "quantitative fixed-income analyst answering in concise institutional English. Use the tools "
-    "to fetch live portfolio data (metrics, allocations, positions) and the "
-    "web to check current issuer news; do not guess figures — call a tool. Cite concrete numbers, "
-    "issuers and sectors, and say clearly when something is not derivable. DV01/CS01 in €/bp."
-)
-COPILOT_TOOLS = [
-    {"name": "get_summary", "description": "Compact snapshot of the whole portfolio (key figures, "
-     "DV01/CS01 ladders, sector exposure, all bond positions).",
-     "input_schema": {"type": "object", "properties": {}}},
-    {"name": "get_metrics", "description": "All headline risk & fund metrics as JSON.",
-     "input_schema": {"type": "object", "properties": {}}},
-    {"name": "get_allocation", "description": "Net allocation in % of NAV, split sovereign vs. credit, "
-     "by a dimension.", "input_schema": {"type": "object", "properties": {"by": {"type": "string",
-      "enum": ["sector", "industry", "rating", "bucket", "country", "ccy", "rank"]}}, "required": ["by"]}},
-    {"name": "get_positions", "description": "Largest positions by market value, optionally filtered by "
-     "type (Bond/CDS/IRS/Future/FX).", "input_schema": {"type": "object", "properties": {
-      "type": {"type": "string"}, "top": {"type": "integer"}}}},
-    {"type": "web_search_20250305", "name": "web_search", "max_uses": 6},
-]
-
-
-def _copilot_tool(name: str, inp: dict) -> str:
-    if name == "get_summary":
-        return _portfolio_digest()
-    if name == "get_metrics":
-        return json.dumps({k: (round(v, 3) if isinstance(v, float) else v) for k, v in M.items()})
-    if name == "get_allocation":
-        by = (inp or {}).get("by", "sector")
-        return alloc_split(B, by, NAV, by.title()).to_json(orient="records")
-    if name == "get_positions":
-        v = POS_VIEW if not (inp or {}).get("type") else POS_VIEW[POS_VIEW["Type"] == inp["type"]]
-        return v.nlargest(int((inp or {}).get("top", 15)), "MV(M)")[POS_COLS].to_json(orient="records")
-    return f"unknown tool: {name}"
-
-
-def _copilot_reply(question: str) -> str:
-    try:
-        cl = _anthropic()
-        msgs = [{"role": "user", "content": question}]
-        r = None
-        for _ in range(6):
-            r = cl.messages.create(
-                model="claude-opus-4-8", max_tokens=3000,
-                system=[{"type": "text", "text": COPILOT_SYSTEM, "cache_control": {"type": "ephemeral"}}],
-                tools=COPILOT_TOOLS, messages=msgs)
-            if r.stop_reason != "tool_use":
-                return _answer_text(r)
-            msgs.append({"role": "assistant", "content": r.content})
-            results = []
-            for b in r.content:
-                if getattr(b, "type", None) == "tool_use":
-                    try:
-                        out = _copilot_tool(b.name, b.input or {})
-                    except Exception as ex:
-                        out = f"tool error: {ex}"
-                    results.append({"type": "tool_result", "tool_use_id": b.id, "content": out})
-            msgs.append({"role": "user", "content": results})
-        return _answer_text(r)
-    except Exception as e:
-        return f"⚠️ Error during request: {e}"
-
-
-ISSUERS = sorted(set(B["issuer"].dropna().astype(str)) | set(D["cds"]["issuer"].dropna().astype(str)))
-NEWS_SYSTEM = (
-    "You are a credit-research analyst for the nordIX Interest Rate Hedged Bond Fund. "
-    "Task: via web search, find recent negative news on the portfolio issuers — "
-    "rating downgrades and negative outlooks, profit warnings, accounting or fraud allegations, "
-    "liquidity/refinancing problems, lawsuits, regulatory action, critical M&A, "
-    "material spread widening. Summarise concisely, institutionally and in English: one line per "
-    "affected issuer with date, key point and source (with link). Sort by severity and prioritise "
-    "the last ~30 days. If you find nothing relevant for an issuer, omit it; if there is nothing "
-    "at all, say so clearly. Restrict yourself exclusively to these portfolio issuers:\n\n"
-    + ", ".join(ISSUERS)
-)
-
-
-def _news_reply(question: str) -> str:
-    try:
-        msg = _anthropic().messages.create(
-            model="claude-opus-4-8", max_tokens=3000,
-            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 8}],
-            system=[{"type": "text", "text": NEWS_SYSTEM, "cache_control": {"type": "ephemeral"}}],
-            messages=[{"role": "user", "content": question}])
-        return _answer_text(msg)
-    except Exception as e:
-        return f"⚠️ Error during web search: {e}"
 
 
 def note(text: str):
@@ -1070,13 +1252,13 @@ def credit_toggle():
 
 
 def _grid(boxes):
-    return html.Div(boxes, style={"display": "flex", "flexWrap": "wrap", "gap": "10px",
-                                  "margin": "6px 0 18px"})
+    return html.Div(boxes, style={"display": "flex", "flexWrap": "wrap", "gap": "14px",
+                                  "margin": "10px 0 30px"})
 
 
 def grid2(*cols):
     return html.Div([html.Div(c, style={"flex": "1 1 460px", "minWidth": "0"}) for c in cols],
-                    style={"display": "flex", "flexWrap": "wrap", "gap": "0 22px"})
+                    style={"display": "flex", "flexWrap": "wrap", "gap": "26px 30px"})
 
 
 def bullet(label, value, limit, kind, fmt):
@@ -1107,6 +1289,10 @@ def cockpit():
 
 def overview_board():
     C = ds.COLORS
+
+    def stat(label, value, sub="", accent=None):
+        return stat_plain(label, value, accent)
+
     fund = []
     if FACTS.get("nav"):
         fund.append(stat("Fund Volume (NAV)", eur(NAV), "100% reference base"))
@@ -1126,17 +1312,17 @@ def overview_board():
             stat("Spread Duration", f"{M['dur_spread']:.2f} y", "fund, bonds + CDS on NAV"),
             stat("WAM", f"{M['wam']:.1f} y", "avg time to maturity"),
             stat("Net Duration", f"{M['dur_net']:.2f} y", "fund, rate after hedges on NAV"),
-            stat("Convexity", f"{M['conv']:.2f}", "MV-weighted"),
         ]),
         _grid([
+            stat("Avg Portfolio Rating",
+                 f"{M['rating_letter']}" + (f" · {M['rating_score']:.1f}" if M['rating_score'] is not None else ""),
+                 "MV-weighted, 1 AAA → 21 D, incl. CDS overlay", C["highlight"]),
             stat("CS01 Total", f"{fmt(M['cs01'])} €/bp",
                  f"bonds {fmt(M['cs01_bonds'])} · CDS {fmt(M['cs01_cds'])}"),
             stat("CS01 Bonds", f"{fmt(M['cs01_bonds'])} €/bp", "cash book"),
             stat("CS01 CDS", f"{fmt(M['cs01_cds'])} €/bp", "overlay", C["highlight"]),
             stat("Avg I-Spread", f"{M['spread_avg']:.0f} bp", "MV-weighted, cash book"),
-            stat("Avg OAS", f"{M['oas_avg']:.0f} bp", "option-adjusted"),
             stat("Avg CDS Spread", f"{M['cds_spread_avg']:.0f} bp", "notional-weighted, overlay", C["highlight"]),
-            stat("Carry Efficiency", f"{M['spd']:.1f} bp/y", "spread per duration", C["highlight"]),
         ]),
         _grid([
             stat("Total Credit Carry", f"{(M['spread_mv'] + M['cds_prem'])/NAV:.0f} bp",
@@ -1153,7 +1339,7 @@ def overview_board():
                  "notional, by protection side", C["highlight"]),
             stat("Net Exposure", f"{M['credit_heat']/NAV:.0%}", "credit heat / NAV"),
         ]),
-        block("FX Exposure", chart(FIGS["fx_exposure"], "fx1")),
+        block("fx", chart(FIGS["fx_exposure"], "fx1")),
     ], style={"paddingTop": "20px"})
 
 
@@ -1171,16 +1357,18 @@ def tab_rates():
 
 
 def tab_credit():
-    cv0 = credit_view(D, CREDIT_SRC[0])
+    cv0 = CREDIT_VIEWS[CREDIT_SRC[0]]
     return ds.container([
         credit_toggle(),
         grid2(
-            block("Credit Map", [
-                html.Div([dropdown("cmap-x", list(CMAP_AXES), "Duration (y)", "190px"),
-                          dropdown("cmap-y", list(CMAP_AXES), "I-Spread (bp)", "190px")],
-                         style={"display": "flex", "gap": "14px", "marginBottom": "8px"}),
-                dcc.Graph(id="cmap", config={"displaylogo": False}, figure=fig_credit_map(cv0))]),
-            block("Hotspots", chart(fig_heatmap(cv0), "cr2"))),
+            html.Div([
+                html.Div([html.Div(ds.section("Credit Map"), style={"flex": "1", "minWidth": "0"}),
+                          dropdown("cmap-x", list(CMAP_AXES), "Duration (y)", "160px"),
+                          dropdown("cmap-y", list(CMAP_AXES), "I-Spread (bp)", "160px")],
+                         style={"display": "flex", "gap": "12px", "alignItems": "flex-end"}),
+                ds.panel(dcc.Graph(id="cmap", config={"displaylogo": False},
+                                   figure=_safe_fig(lambda: fig_credit_map(cv0))))]),
+            block("Hotspots", chart(_safe_fig(lambda: fig_heatmap(cv0)), "cr2"))),
         grid2(
             block("Spread Term Structure", chart(FIGS["spread_terms"], "spread-curve")),
             block("Spread Risk", chart(FIGS["ladder_cs"], "c2"))),
@@ -1190,10 +1378,6 @@ def tab_credit():
         grid2(
             block("Credit Concentration", chart(FIGS["dts_concentration"], "dtsc")),
             block("Capital vs. Carry", chart(FIGS["carry_treemap"], "i4"))),
-        block("Top 20 positions", ds.data_table(
-            data=POS_VIEW.nlargest(20, "MV(M)")[TOP10_COLS].to_dict("records"),
-            columns=[{"name": c, "id": c} for c in TOP10_COLS], page_action="none",
-            fixed_rows={"headers": False}, style_table={**ds.TABLE_STYLE, "maxHeight": "none"})),
     ], max_width=1400)
 
 
@@ -1204,38 +1388,25 @@ def tab_positionen():
                      style={"marginBottom": "10px"}),
             ds.data_table(
                 id="pos-table", data=POS_VIEW.to_dict("records"),
-                columns=[{"name": c, "id": c} for c in POS_COLS],
+                columns=[{"name": "size", "id": "MV(M)", "type": "numeric",
+                          "format": Format(precision=1, scheme=Scheme.fixed).symbol(Symbol.yes).symbol_suffix(" MM")}
+                         if c == "MV(M)" else {"name": c, "id": c} for c in POS_COLS],
                 filter_action="native", sort_action="native", page_action="none",
                 cell_selectable=True, include_headers_on_copy_paste=True,
                 export_format="xlsx", export_headers="display",
+                style_cell_conditional=[{"if": {"column_id": c}, "textAlign": "center"}
+                                        for c in POS_COLS if c != "Name"]
+                                       + [{"if": {"column_id": "Name"}, "textAlign": "left"}],
                 style_filter=FILTER_STYLE, style_table={**ds.TABLE_STYLE, "maxHeight": "80vh"})]),
-        block("News Radar", [
-            dcc.Textarea(id="news-input",
-                         value="Which issuers in the portfolio currently have bad news?",
-                         style={"width": "100%", "height": "70px", "resize": "vertical",
-                                "fontFamily": ds.FONT["family"], "fontSize": "14px", "padding": "10px",
-                                "border": f"1px solid {ds.COLORS['border']}", "borderRadius": "6px",
-                                "backgroundColor": "#FFFFFF", "color": ds.COLORS["text"],
-                                "boxSizing": "border-box"}),
-            html.Div([
-                html.Button("Search bad news", id="news-send", n_clicks=0, style=ds.BUTTON_STYLE),
-                html.Span("Live web search across all portfolio issuers via Claude Opus 4.8 — "
-                          "may take 20–40 s, billable.",
-                          style={**ds.LABEL_STYLE, "textTransform": "none", "letterSpacing": 0,
-                                 "marginLeft": "14px"}),
-            ], style={"display": "flex", "alignItems": "center", "marginTop": "10px"}),
-            dcc.Loading(type="dot", color=ds.COLORS["primary"], children=dcc.Markdown(
-                id="news-output",
-                style={"marginTop": "14px", "fontFamily": ds.FONT["family"], "fontSize": "14px",
-                       "color": ds.COLORS["text"], "lineHeight": 1.5}))]),
     ], max_width=1400)
 
 
-def rep_table(df: pd.DataFrame):
+def rep_table(df: pd.DataFrame, export: bool = True):
+    exp = dict(export_format="csv", export_headers="display") if export else {}
     return ds.data_table(
         data=df.to_dict("records"),
         columns=[{"name": c, "id": c} for c in df.columns],
-        page_action="none", export_format="csv", export_headers="display",
+        page_action="none", **exp,
         fixed_rows={"headers": False},
         style_data_conditional=[{"if": {"filter_query": '{' + df.columns[0] + '} = "Σ Total"'},
                                  "fontWeight": 700, "background": ds.COLORS["surface"]}],
@@ -1283,8 +1454,8 @@ def tab_reporting():
 
 
 PF_SUBTABS = [("Overview", "overview", tab_overview),
-              ("Credit", "credit", tab_credit), ("Rates", "rates", tab_rates),
-              ("Positions & AI", "pos", tab_positionen)]
+              ("Rates", "rates", tab_rates), ("Credit", "credit", tab_credit),
+              ("Positions", "pos", tab_positionen)]
 
 
 def data_error_panel(title: str, detail: str):
@@ -1298,36 +1469,54 @@ def data_error_panel(title: str, detail: str):
     ])], max_width=1400)
 
 
+def _subtabs(value, spec, extra=(), tab_style=TAB_STYLE, sel_style=TAB_SELECTED):
+    return html.Div([*extra, dcc.Tabs(value=value, style=SUBTABS_ROW, colors=TAB_COLORS, children=[
+        dcc.Tab(label=l, value=v, style=tab_style, selected_style=sel_style, children=b())
+        for l, v, b in spec])])
+
+
 def portfolio_analysis():
     if not PORTFOLIO_OK:
         return data_error_panel(
             "Portfolio data could not be loaded.",
-            f"The market-data tabs “Markets” and “Admin” keep working. "
-            f"Please check nad.xlsx (open in Excel? moved? sheets renamed?). "
-            f"Technical detail: {PORTFOLIO_ERR}")
-    return html.Div([dcc.Tabs(value="overview", style={"marginTop": "12px"}, children=[
-        dcc.Tab(label=lbl, value=val, style=TAB_STYLE, selected_style=TAB_SELECTED, children=build())
-        for lbl, val, build in PF_SUBTABS])])
+            f"The other tabs keep working. Please check nad.xlsx "
+            f"(open in Excel? moved? sheets renamed?). Technical detail: {PORTFOLIO_ERR}")
+    return _subtabs("overview", PF_SUBTABS)
 
 
-CREDIT_MODES = {"Corporate": "corp", "Financial": "fin", "Sovereign / SSA": "sov"}
-_CM_PATHS = [r"q:\00_pm\6_ai\0_code", r"S:\benjaminSuermann\3_env"]
-_CM_ENGINE_FILE = r"q:\00_pm\6_ai\0_code\creditManagement.py"
+CREDIT_MODES = {"Corporate": "corp", "Financial": "fin", "Insurer": "ins", "Sovereign / SSA": "sov"}
+CRED_OUTDIR = os.environ.get("NAD_CREDIT_OUT") or r"Q:\00_pm\1_research\3_issuerCreditResearch"
+_CM_PATHS = [os.environ.get("NAD_ENGINE_DIR", r"q:\00_pm\6_ai\0_code"), str(ROOT / "3_env")]
+_CM_ENGINE_FILE = os.environ.get("NAD_ENGINE", r"q:\00_pm\6_ai\0_code\creditManagement.py")
 _cm_mod = None
 
-ISS_INPUT = {"flex": "1", "minWidth": "220px", "padding": "9px 12px", "fontFamily": ds.FONT["family"],
-             "fontSize": "14px", "border": f"1px solid {ds.COLORS['border']}", "borderRadius": "6px",
-             "backgroundColor": "#FFFFFF", "color": ds.COLORS["text"], "boxSizing": "border-box"}
 ISS_DROP = {"border": f"1.5px dashed {ds.COLORS['primary']}", "borderRadius": "6px", "padding": "14px",
             "textAlign": "center", "cursor": "pointer", "margin": "10px 0", "background": ds.COLORS["surface"],
             "fontFamily": ds.FONT["family"], "fontSize": "13px", "color": ds.COLORS["secondary"]}
+
+ISS_H = "50px"
+ISS_INPUT_BIG = {"flex": "1 1 220px", "minWidth": "180px", "height": ISS_H, "padding": "0 18px",
+                 "fontFamily": ds.FONT["family"], "fontSize": "16px", "color": "#F5F1E7",
+                 "backgroundColor": "var(--c-input)", "border": f"1px solid {ds.COLORS['border']}",
+                 "borderRadius": "12px", "boxSizing": "border-box", "outline": "none"}
+ISS_BTN_BIG = {**ds.BUTTON_STYLE, "whiteSpace": "nowrap", "height": ISS_H, "padding": "0 34px",
+               "fontSize": "15px", "borderRadius": "12px", "flex": "0 0 auto"}
+ISS_CONTROLS_ROW = {"display": "flex", "alignItems": "stretch", "gap": "10px", "flexWrap": "wrap",
+                    "width": "100%"}
+ISS_TITLE = {"fontFamily": ds.FONT["serif"], "fontSize": "23px", "fontWeight": 500, "letterSpacing": "0.2px",
+             "color": ds.COLORS["ink"], "textAlign": "center", "textTransform": "lowercase",
+             "margin": "6px auto 26px"}
 
 
 def _cm():
     global _cm_mod
     if _cm_mod is None:
+        if not os.path.isfile(_CM_ENGINE_FILE):
+            raise RuntimeError(
+                f"Research engine not found: {_CM_ENGINE_FILE}. Set NAD_ENGINE to its path, "
+                "otherwise the Issuer analysis tabs stay disabled on this machine.")
         for p in _CM_PATHS:
-            if p not in sys.path:
+            if p and os.path.isdir(p) and p not in sys.path:
                 sys.path.insert(0, p)
         import importlib.util
         spec = importlib.util.spec_from_file_location("_cm_engine", _CM_ENGINE_FILE)
@@ -1336,6 +1525,19 @@ def _cm():
         spec.loader.exec_module(mod)
         _cm_mod = mod
     return _cm_mod
+
+
+def _engine_ready():
+    if not os.path.isfile(_CM_ENGINE_FILE):
+        return False
+    for p in _CM_PATHS:
+        if p and os.path.isdir(p) and p not in sys.path:
+            sys.path.insert(0, p)
+    try:
+        import importlib.util
+        return importlib.util.find_spec("research_db") is not None
+    except Exception:
+        return False
 
 
 def _cm_error(msg):
@@ -1348,13 +1550,27 @@ def _status(cid):
                                     "letterSpacing": 0, "whiteSpace": "nowrap"})
 
 
-def _issuer_controls(mode_id, inp_id, btn_id, btn_label, status_id, placeholder):
-    return html.Div([
-        dropdown(mode_id, list(CREDIT_MODES), "Corporate", "185px"),
-        dcc.Input(id=inp_id, type="text", debounce=False, placeholder=placeholder, style=ISS_INPUT),
-        html.Button(btn_label, id=btn_id, n_clicks=0, style={**ds.BUTTON_STYLE, "whiteSpace": "nowrap"}),
-        _status(status_id),
-    ], style={"display": "flex", "alignItems": "center", "gap": "10px", "flexWrap": "wrap"})
+def _iss_dropdown(cid):
+    return dcc.Dropdown(id=cid, className="iss-dd", clearable=False, value="Corporate",
+                        options=[{"label": o, "value": o} for o in CREDIT_MODES],
+                        style={"flex": "0 0 190px", "fontFamily": ds.FONT["family"], "fontSize": "15px"})
+
+
+def _issuer_controls(mode_id, inp_id, btn_id, btn_label, status_id, placeholder,
+                     title=None, subtitle=None):
+    head = []
+    if title:
+        head.append(html.Div(title, style=ISS_TITLE))
+    if subtitle:
+        head.append(html.Div(subtitle, style=ISS_SUBTITLE))
+    return html.Div(head + [
+        html.Div([
+            _iss_dropdown(mode_id),
+            dcc.Input(id=inp_id, type="text", debounce=False, placeholder=placeholder, style=ISS_INPUT_BIG),
+            html.Button(btn_label, id=btn_id, n_clicks=0, style=ISS_BTN_BIG),
+        ], style=ISS_CONTROLS_ROW),
+        html.Div(_status(status_id), style={"textAlign": "center", "marginTop": "12px", "minHeight": "18px"}),
+    ], style={"maxWidth": "820px", "margin": "0 auto", "width": "100%", "paddingBottom": "26px"})
 
 
 def search_prospectus(cm, issuer):
@@ -1399,304 +1615,333 @@ def _prosp_confirm_card(cand):
     ])
 
 
+XAIA_DIR = Path(os.environ.get("NAD_XAIA") or (ROOT / "0_tradingVE" / "1_research" / "xaia"))
+BONDS_DIR = Path(os.environ.get("NAD_BONDS") or (ROOT / "0_tradingVE" / "1_research" / "bonds"))
+AGENT_MAX_DOCS, AGENT_MAX_BYTES = 5, 16_000_000
+
+RESTR_SYSTEM = (
+    "You are restR.-Agent, a credit strategist who speaks with the house view of XAIA Investment, a "
+    "relative-value credit manager. Your lens: value lives in relative mispricings, not directional bets. You "
+    "think in the CDS-cash basis, capital-structure arbitrage, spread per unit of risk (DTS), convexity, "
+    "default vs. recovery, and where consensus misprices credit. You are quantitative, contrarian and "
+    "risk-aware (liquidity, jump-to-default, crowding), and you tie a view to relative value and, where "
+    "useful, a concrete trade expression (basis, curve, cap-structure, index vs. single-name). Ground every "
+    "answer in the attached XAIA research; where it is silent, reason from XAIA's RV framework and say so. Be "
+    "concise, opinionated and specific. Answer in the user's language.")
+BOND_SYSTEM = (
+    "You are bond-Agent, a fixed-income credit analyst grounded in the attached bond research. You focus on "
+    "issuer fundamentals and their trajectory, credit quality and rating trend, covenants and structure, "
+    "seniority and recovery, sector and curve relative value, and concrete bond selection (which line, what "
+    "spread, what risk). Ground every answer in the attached research; where it is silent, reason as a "
+    "seasoned fundamental fixed-income analyst and say so. Be concise, specific and actionable. Answer in the "
+    "user's language.")
+
+AGENTS = {
+    "restr": {"name": "restR.-Agent", "dir": XAIA_DIR, "system": RESTR_SYSTEM, "docs": None},
+    "bond": {"name": "bond-Agent", "dir": BONDS_DIR, "system": BOND_SYSTEM, "docs": None},
+}
+AGENT_ORDER = ["bond", "restr"]
+
+
+def _pdf_date(name):
+    months = ["january", "february", "march", "april", "may", "june", "july", "august",
+              "september", "october", "november", "december"]
+    s = name.lower()
+    yr = next((int(y) for y in re.findall(r"20\d\d", s)), 0)
+    mo = next((i + 1 for i, m in enumerate(months) if m in s), 0)
+    return yr, mo
+
+
+def _agent_docs(key):
+    a = AGENTS[key]
+    if a["docs"] is None:
+        a["docs"], tot = [], 0
+        if a["dir"].is_dir():
+            files = sorted([*a["dir"].glob("*.pdf"), *a["dir"].glob("*.txt")],
+                           key=lambda p: (_pdf_date(p.name), p.stat().st_mtime), reverse=True)
+            for f in files:
+                b = f.stat().st_size
+                if len(a["docs"]) >= AGENT_MAX_DOCS or tot + b > AGENT_MAX_BYTES:
+                    continue
+                if f.suffix.lower() == ".txt":
+                    src = {"type": "text", "media_type": "text/plain",
+                           "data": f.read_text(encoding="utf-8", errors="ignore")}
+                else:
+                    src = {"type": "base64", "media_type": "application/pdf",
+                           "data": base64.b64encode(f.read_bytes()).decode()}
+                a["docs"].append({"type": "document", "title": f.name, "source": src,
+                                  "cache_control": {"type": "ephemeral"}})
+                tot += b
+    return a["docs"]
+
+
+def _agent_reply(key, hist):
+    a = AGENTS.get(key) or AGENTS["restr"]
+    docs = _agent_docs(key if key in AGENTS else "restr")
+    msgs = []
+    for i, mrec in enumerate(hist):
+        if i == 0 and mrec["role"] == "user" and docs:
+            msgs.append({"role": "user", "content": docs + [{"type": "text", "text": mrec["content"]}]})
+        else:
+            msgs.append({"role": mrec["role"], "content": mrec["content"]})
+    r = _anthropic().messages.create(model=BVI_MODEL, max_tokens=1100, system=a["system"], messages=msgs)
+    return "".join(b.text for b in r.content if getattr(b, "type", None) == "text").strip()
+
+
+def _agent_dropdown(cid):
+    return dcc.Dropdown(id=cid, className="iss-dd", clearable=False, value=AGENT_ORDER[0],
+                        options=[{"label": AGENTS[k]["name"], "value": k} for k in AGENT_ORDER],
+                        style={"flex": "0 0 190px", "fontFamily": ds.FONT["family"], "fontSize": "15px"})
+
+
+def xagent_box(prefix, placeholder):
+    return ds.container([
+        block("Research agents", [
+            dcc.Loading(type="dot", color=ds.COLORS["primary"],
+                        children=html.Div(id=f"{prefix}-chat", style={"margin": "12px 0"})),
+            html.Div([
+                _agent_dropdown(f"{prefix}-agent"),
+                dcc.Input(id=f"{prefix}-q", type="text", debounce=False, style=ISS_INPUT_BIG, placeholder=placeholder),
+                html.Button("Ask", id=f"{prefix}-send", n_clicks=0, style=ISS_BTN_BIG),
+            ], style=ISS_CONTROLS_ROW),
+            dcc.Store(id=f"{prefix}-hist", data=[], storage_type="session"),
+        ]),
+    ], max_width=1080)
+
+
 def tab_iss_credit():
     return html.Div([
-        block("Credit analysis — 17-point memo (Opus 4.8, web search + verification)", [
+        ds.panel([
             _issuer_controls("cred-mode", "cred-input", "cred-run", "Analyze", "cred-status",
-                             "Issuer (e.g. Volkswagen AG, Deutsche Bank AG)…"),
-            note("Cache-first: known issuers load instantly, new ones run live (~1–2 min, billable).")]),
+                             "Issuer (e.g. Volkswagen AG, Deutsche Bank AG)…",
+                             title="Issuer Credit Analysis")],
+            pad="30px 30px 26px"),
         dcc.Loading(type="dot", color=ds.COLORS["primary"], children=html.Div(id="cred-output")),
-        dcc.Store(id="cred-store"),
+        dcc.Store(id="cred-store", storage_type="session"),
+        xagent_box("xac", "Ask about credit, a name, relative value or a basis trade…"),
     ], style={"paddingTop": "4px"})
 
 
-LIQ_MILD = {
-    "corp": {"rev_growth": 5, "ebitda_shock": 0, "rate_shock_bp": 0, "capex_flex": 90, "rcf_avail": 100, "market_access": 1},
-    "fin": {"income_shock": -10, "cor_shock": 1, "rwa_growth": 2, "deposit_outflow": 0, "payout": 40},
-    "sov": {"gdp_shock": 0, "rate_shock_bp": 0, "primary_balance_delta": 1, "fx_shock": 0},
+CREDIT_METRICS = {
+    "corp": [
+        {"key": "leverage", "label": "Net Debt / EBITDA", "unit": "x", "better": "down"},
+        {"key": "ebitda_margin", "label": "EBITDA margin", "unit": "%", "better": "up"},
+        {"key": "interest_cover", "label": "EBITDA / Interest", "unit": "x", "better": "up", "band": 1},
+        {"key": "fcf_debt", "label": "FCF / Debt", "unit": "%", "better": "up", "band": 0},
+        {"key": "liquidity_cover", "label": "Liquidity / 12m maturities", "unit": "x", "better": "up", "band": 1},
+    ],
+    "fin": [
+        {"key": "cet1", "label": "CET1 ratio", "unit": "%", "better": "up"},
+        {"key": "lcr", "label": "LCR", "unit": "%", "better": "up", "band": 100},
+        {"key": "npl", "label": "NPL ratio", "unit": "%", "better": "down"},
+        {"key": "rote", "label": "Return on tangible equity", "unit": "%", "better": "up"},
+        {"key": "cost_income", "label": "Cost / Income", "unit": "%", "better": "down"},
+    ],
+    "ins": [
+        {"key": "solvency2", "label": "Solvency II ratio", "unit": "%", "better": "up", "band": 100},
+        {"key": "combined", "label": "Combined ratio", "unit": "%", "better": "down", "band": 100},
+        {"key": "roe", "label": "Return on equity", "unit": "%", "better": "up"},
+        {"key": "fin_leverage", "label": "Financial leverage", "unit": "%", "better": "down"},
+        {"key": "interest_cover", "label": "Interest coverage", "unit": "x", "better": "up", "band": 1},
+    ],
+    "sov": [
+        {"key": "debt_gdp", "label": "Debt / GDP", "unit": "%", "better": "down"},
+        {"key": "fiscal_balance", "label": "Fiscal balance", "unit": "% GDP", "better": "up", "band": 0},
+        {"key": "interest_rev", "label": "Interest / Revenue", "unit": "%", "better": "down"},
+        {"key": "gfn", "label": "Gross financing need", "unit": "% GDP", "better": "down"},
+        {"key": "growth", "label": "Real GDP growth", "unit": "%", "better": "up", "band": 0},
+        {"key": "reserves", "label": "FX reserves", "unit": "months", "better": "up"},
+    ],
 }
-LIQ_HARSH = {
-    "corp": {"rev_growth": -3, "ebitda_shock": 20, "rate_shock_bp": 200, "capex_flex": 110, "rcf_avail": 60, "market_access": 0},
-    "fin": {"income_shock": 10, "cor_shock": 3, "rwa_growth": 8, "deposit_outflow": 15, "payout": 60},
-    "sov": {"gdp_shock": 4, "rate_shock_bp": 200, "primary_balance_delta": -2, "fx_shock": 20},
-}
 
 
-def _fill_none(seq):
-    out, last = list(seq), None
-    for i, v in enumerate(out):
-        out[i] = last if v is None else v
-        last = out[i] if v is not None else last
-    nxt = None
-    for i in range(len(out) - 1, -1, -1):
-        if out[i] is None:
-            out[i] = nxt
-        else:
-            nxt = out[i]
-    return [float(x) if x is not None else 0.0 for x in out]
+def _metrics_schema(mode):
+    mp = {}
+    for m in CREDIT_METRICS[mode]:
+        mp[m["key"]] = {"type": "object", "required": ["hist", "fcst"], "properties": {
+            "hist": {"type": "array", "items": {"type": ["number", "null"]},
+                     "description": f"{m['label']} ({m['unit']}) - last 5 fiscal years, oldest to newest, actuals."},
+            "fcst": {"type": "array", "items": {"type": ["number", "null"]},
+                     "description": f"{m['label']} ({m['unit']}) - next 5 years, base-case forecast."},
+            "note": {"type": "string", "description": "one short clause"}}}
+    return {"type": "object", "required": ["rating", "trend", "headline", "metrics"], "properties": {
+        "company": {"type": "string"},
+        "rating": {"type": "string", "description": "agency-style with outlook, e.g. 'BBB / stable'"},
+        "trend": {"type": "string", "enum": ["improving", "stable", "deteriorating"]},
+        "headline": {"type": "string", "description": "one sentence - the credit in a nutshell"},
+        "biggest_risk": {"type": "string", "description": "one line"},
+        "metrics": {"type": "object", "required": [m["key"] for m in CREDIT_METRICS[mode]], "properties": mp},
+        "sources": {"type": "array", "items": {"type": "string"}}}}
 
 
-def _fig_liq(label, hist_x, hist_y, fwd_x, base_y, lo, hi, hline=None):
+CREDIT_MODEL = "claude-sonnet-5"
+
+
+def _extract_tool(msg, name):
+    for b in msg.content:
+        if getattr(b, "type", None) == "tool_use" and getattr(b, "name", "") == name:
+            return b.input
+    return None
+
+
+def _credit_metrics_job(issuer, mode):
+    labels = ", ".join(f"{m['label']} ({m['unit']})" for m in CREDIT_METRICS[mode])
+    tool = {"name": "report_credit",
+            "description": "Report the issuer's key credit metrics with 5y history and 5y base-case forecast.",
+            "input_schema": _metrics_schema(mode)}
+    prompt = (
+        f"You are a senior Oaktree credit analyst. For '{issuer}' (type: {mode}), assess these key credit "
+        f"metrics: {labels}. For each, give 5 fiscal years of actual history (oldest to newest) and a 5-year "
+        f"base-case forecast, grounded in the latest reported financials and guidance. Also give a one-sentence "
+        f"headline, an agency-style rating with outlook, the credit trend, and the single biggest risk. Give "
+        f"best estimates where data is not disclosed; use null only if truly unknowable.")
+    cl = _anthropic()
+    # Pass 1: let it research the web, then report.
+    try:
+        msg = cl.messages.create(model=CREDIT_MODEL, max_tokens=8000,
+            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 6}, tool],
+            messages=[{"role": "user", "content": prompt + " Search the web for current figures, then call report_credit."}])
+        out = _extract_tool(msg, "report_credit")
+        if out:
+            return out
+    except Exception:
+        pass
+    # Pass 2: force the structured tool from the model's own knowledge (guaranteed output).
+    msg = cl.messages.create(model=CREDIT_MODEL, max_tokens=8000, tools=[tool],
+        tool_choice={"type": "tool", "name": "report_credit"},
+        messages=[{"role": "user", "content": prompt + " Use your own knowledge; call report_credit now."}])
+    out = _extract_tool(msg, "report_credit")
+    if out:
+        return out
+    raise RuntimeError("model returned no structured result")
+
+
+def _fmt_metric(v, unit):
+    if v is None:
+        return "—"
+    return f"{v:.1f}x" if unit == "x" else f"{v:,.1f} {unit}"
+
+
+def _metric_fig(m, md, t0):
+    hist = [None if v is None else float(v) for v in (md.get("hist") or [])][-5:]
+    fcst = [None if v is None else float(v) for v in (md.get("fcst") or [])][:5]
+    if not any(v is not None for v in hist) and not any(v is not None for v in fcst):
+        return None
+    yh = [t0 - len(hist) + 1 + i for i in range(len(hist))]
     fig = go.Figure()
-    fig.add_scatter(x=list(fwd_x) + list(fwd_x)[::-1], y=list(hi) + list(lo)[::-1], fill="toself",
-                    fillcolor="rgba(78,106,134,.14)", line=dict(width=0), hoverinfo="skip", showlegend=False)
-    if len(hist_x) > 1:
-        fig.add_scatter(x=hist_x, y=hist_y, mode="lines+markers", line=dict(color=ds.HEX["ink"], width=2),
+    if hist:
+        fig.add_scatter(x=yh, y=hist, mode="lines+markers", line=dict(color=ds.HEX["ink"], width=2),
                         marker=dict(size=5), hovertemplate="%{x}: %{y:,.1f}<extra></extra>")
-    fig.add_scatter(x=fwd_x, y=base_y, mode="lines+markers",
-                    line=dict(color=ds.HEX["primary"], width=2, dash="dot"), marker=dict(size=5),
-                    hovertemplate="%{x}: %{y:,.1f}<extra></extra>")
-    if hline:
-        fig.add_hline(y=hline, line=dict(color=ds.HEX["negative"], width=1, dash="dash"))
-    fig = ds.style_figure(fig, height=230)
-    return fig.update_layout(hovermode="x unified", showlegend=False,
-        title=dict(text=label, x=0, font=dict(family=ds.FONT["family"], size=13, color=ds.HEX["text"])),
-        margin=dict(t=34, b=24, l=8, r=14))
+    if fcst:
+        last = next((v for v in reversed(hist) if v is not None), fcst[0])
+        yf = [yh[-1] if yh else t0] + [t0 + 1 + i for i in range(len(fcst))]
+        fig.add_scatter(x=yf, y=[last] + fcst, mode="lines+markers",
+                        line=dict(color=ds.HEX["primary"], width=2, dash="dot"), marker=dict(size=5),
+                        hovertemplate="%{x}: %{y:,.1f} (f)<extra></extra>")
+    if m.get("band") is not None:
+        fig.add_hline(y=m["band"], line=dict(color=ds.HEX["negative"], width=1, dash="dash"))
+    latest = next((v for v in reversed(hist) if v is not None), None)
+    ttl = f"{m['label']}   ·   {_fmt_metric(latest, m['unit'])}"
+    fig = ds.style_figure(fig, height=210)
+    fig.update_layout(showlegend=False, hovermode="x unified", margin=dict(t=32, b=22, l=8, r=12),
+        title=dict(text=ttl, x=0, font=dict(family=ds.FONT["family"], size=12.5, color=ds.HEX["text"])))
+    return dcc.Graph(figure=fig, config={"displaylogo": False})
 
 
-def build_liq_fans(mode, data, cm):
-    inputs = {f["key"]: data.get(f["key"]) for f in cm.liquidity.LIQ_INPUTS[mode]}
-    hist = data.get("history") or {}
+def build_credit_model(mode, data, issuer=""):
+    trend = str(data.get("trend", "stable")).lower()
+    color = {"improving": ds.HEX["positive"], "deteriorating": ds.HEX["negative"]}.get(trend, ds.HEX["highlight"])
     t0 = pd.Timestamp.today().year
-    base = cm.liquidity.project(mode, inputs, {}, t0=t0, history=hist)
-    mild = cm.liquidity.project(mode, inputs, LIQ_MILD[mode], t0=t0)
-    harsh = cm.liquidity.project(mode, inputs, LIQ_HARSH[mode], t0=t0)
-    labels, fwd = cm.liquidity.LABELS, [t0 + i for i in range(5)]
-
-    def _f(v):
-        try:
-            return float(v)
-        except Exception:
-            return 0.0
+    verdict = ds.panel([
+        html.Div([
+            html.Span(style={"width": "12px", "height": "12px", "borderRadius": "50%", "background": color,
+                             "display": "inline-block", "marginRight": "10px", "boxShadow": f"0 0 10px {color}"}),
+            html.Span(data.get("rating", "—"), style={"fontFamily": ds.FONT["serif"], "fontSize": "20px",
+                                                      "fontWeight": 600, "color": color}),
+            html.Span(f"  ·  {issuer or data.get('company', '')} · {mode.upper()} · {trend}",
+                      style={"fontFamily": ds.FONT["family"], "fontSize": "13px", "color": ds.COLORS["muted"]}),
+        ], style={"display": "flex", "alignItems": "center", "flexWrap": "wrap"}),
+        html.Div(data.get("headline", ""), style={"fontFamily": ds.FONT["serif"], "fontSize": "16px",
+                                                  "color": ds.COLORS["ink"], "marginTop": "10px"}),
+        html.Div("Key risk — " + data["biggest_risk"], style={"fontFamily": ds.FONT["family"], "fontSize": "13.5px",
+                 "color": ds.COLORS["text"], "marginTop": "8px", "fontWeight": 600}) if data.get("biggest_risk") else html.Span(),
+    ])
+    md = data.get("metrics") or {}
     cards = []
-    for key in base["table"]:
-        b = base["series"].get(key)
-        if not b:
-            continue
-        b = _fill_none(b)
-        m, h = _fill_none(mild["series"].get(key, b)), _fill_none(harsh["series"].get(key, b))
-        lo = [min(m[i], h[i]) for i in range(len(fwd))]
-        hi = [max(m[i], h[i]) for i in range(len(fwd))]
-        hv = [float(x) for x in (hist.get(key) or [])][-4:]
-        if hv:
-            hx, hy = [t0 - len(hv) + i for i in range(len(hv))] + [t0], hv + [b[0]]
-        else:
-            hx, hy = [t0], [b[0]]
-        hline = None
-        if key == "leverage" and _f(inputs.get("leverage_covenant")) > 0:
-            hline = _f(inputs.get("leverage_covenant"))
-        elif key == "cet1_ratio" and _f(inputs.get("mda_trigger")) > 0:
-            hline = _f(inputs.get("mda_trigger"))
-        elif key in ("lcr", "nsfr"):
-            hline = 100
-        cards.append(html.Div(dcc.Graph(figure=_fig_liq(labels.get(key, key), hx, hy, fwd, b, lo, hi, hline),
-                     config={"displaylogo": False}), style={"flex": "1 1 330px", "minWidth": "300px"}))
-    head = base.get("headline", {})
-    top = ds.panel([
-        html.Div(f"{data.get('company', '')} · {mode.upper()} · {head.get('constraint', '')}",
-                 style={**ds.LABEL_STYLE, "textTransform": "none", "letterSpacing": 0, "fontSize": "12px"}),
-        html.Div(data.get("commentary", ""), style={"fontFamily": ds.FONT["family"], "fontSize": "13px",
-                 "color": ds.COLORS["text"], "marginTop": "6px", "lineHeight": 1.5})])
-    return html.Div([top, html.Div(cards, style={"display": "flex", "flexWrap": "wrap", "gap": "6px"})])
+    for m in CREDIT_METRICS.get(mode, CREDIT_METRICS["corp"]):
+        g = _metric_fig(m, md.get(m["key"]) or {}, t0)
+        if g:
+            cards.append(html.Div(g, style={"flex": "1 1 300px", "minWidth": "280px"}))
+    body = [verdict, html.Div(cards, style={"display": "flex", "flexWrap": "wrap", "gap": "8px", "marginTop": "6px"})]
+    src = data.get("sources") or []
+    if src:
+        body.append(html.Details([
+            html.Summary("sources", style={"cursor": "pointer", "color": ds.COLORS["primary"],
+                "fontFamily": ds.FONT["family"], "fontSize": "12px", "margin": "10px 2px 4px"}),
+            html.Div(" · ".join(str(s) for s in src), style={**ds.LABEL_STYLE, "textTransform": "none",
+                     "letterSpacing": 0, "fontSize": "11.5px", "lineHeight": 1.5})]))
+    return html.Div(body)
 
 
 def tab_iss_liquidity():
     return html.Div([
-        block("Financials — history + forward range", [
+        ds.panel([
             _issuer_controls("liqm-mode", "liqm-input", "liqm-run", "Build model", "liqm-status",
-                             "Issuer…"),
-            note("Enter an issuer and pick its type. The key financial metrics are fetched and shown as "
-                 "actuals plus a forward range (favourable–adverse fan). ~15–30 s, billable.")]),
+                             "Issuer…", title="Liquidity & Stress Model")],
+            pad="30px 30px 26px"),
         dcc.Loading(type="dot", color=ds.COLORS["primary"], children=html.Div(id="liqm-output")),
-        dcc.Store(id="liqm-store"),
+        dcc.Store(id="liqm-store", storage_type="session"),
+        xagent_box("xam", "Ask about liquidity, covenants, stress or relative value…"),
     ], style={"paddingTop": "4px"})
 
 
 def tab_iss_prospectus():
     return html.Div([
-        block("Prospectus & Recovery — Oaktree style (covenants · waterfall · recovery)", [
+        ds.panel([
             html.Div([
-                dcc.Input(id="prosp-issuer", type="text", debounce=False, style=ISS_INPUT,
-                          placeholder="Issuer / instrument (the AI searches for the prospectus)…"),
-                html.Button("Search prospectus", id="prosp-search", n_clicks=0,
-                            style={**ds.BUTTON_STYLE, "whiteSpace": "nowrap"}),
-                _status("prosp-status"),
-            ], style={"display": "flex", "alignItems": "center", "gap": "10px", "flexWrap": "wrap"}),
-            dcc.Upload(id="prosp-upload", multiple=True, style=ISS_DROP,
-                       children="… or drag a prospectus PDF here / click"),
-            html.Div(id="prosp-files"),
-            html.Button("Analyze attached PDF", id="prosp-run-file", n_clicks=0,
-                        style={**ds.BUTTON_STYLE, "background": ds.COLORS["secondary"]}),
-            html.Div(id="prosp-confirm", style={"marginTop": "10px"}),
-            note("Without a file, the AI searches the current bond prospectus online and asks whether the "
-                 "document matches; the full analysis runs only after confirmation.")]),
+                html.Div("Prospectus & Recovery", style=ISS_TITLE),
+                html.Div([
+                    dcc.Input(id="prosp-issuer", type="text", debounce=False, style=ISS_INPUT_BIG,
+                              placeholder="Issuer / instrument (the AI searches for the prospectus)…"),
+                    html.Button("Search prospectus", id="prosp-search", n_clicks=0, style=ISS_BTN_BIG),
+                ], style=ISS_CONTROLS_ROW),
+                html.Div(_status("prosp-status"),
+                         style={"textAlign": "center", "marginTop": "12px", "minHeight": "18px"}),
+                dcc.Upload(id="prosp-upload", multiple=True, style=ISS_DROP,
+                           children="… or drag a prospectus PDF here / click"),
+                html.Div(id="prosp-files"),
+                html.Div(html.Button("Analyze attached PDF", id="prosp-run-file", n_clicks=0,
+                                     style={**ds.BUTTON_STYLE, "background": ds.COLORS["secondary"]}),
+                         style={"textAlign": "center", "marginTop": "10px"}),
+                html.Div(id="prosp-confirm", style={"marginTop": "10px"}),
+            ], style={"maxWidth": "820px", "margin": "0 auto", "width": "100%", "paddingBottom": "26px"})],
+            pad="30px 30px 26px"),
         dcc.Loading(type="dot", color=ds.COLORS["primary"], children=html.Div(id="prosp-output")),
-        dcc.Store(id="prosp-store"), dcc.Store(id="prosp-cand"), dcc.Store(id="prosp-files-data", data=[]),
+        dcc.Store(id="prosp-store", storage_type="session"), dcc.Store(id="prosp-cand"),
+        dcc.Store(id="prosp-files-data", data=[]),
+        xagent_box("xap", "Ask about the prospectus, covenants, recovery or relative value…"),
     ], style={"paddingTop": "4px"})
 
 
-ISSUER_SUBTABS = [("Credit Analysis", "credit", tab_iss_credit),
-                  ("Liquidity & Stress", "liq", tab_iss_liquidity),
-                  ("Prospectus & Recovery", "prosp", tab_iss_prospectus)]
+ISSUER_SUBTABS = [("Credit", "credit", tab_iss_credit),
+                  ("Model", "liq", tab_iss_liquidity),
+                  ("Prospectus", "prosp", tab_iss_prospectus)]
 
 
 def issuer_analysis():
-    return html.Div([
-        dcc.Download(id="cred-pdf-dl"), dcc.Download(id="liqm-pdf-dl"), dcc.Download(id="prosp-pdf-dl"),
-        dcc.Tabs(value="credit", style={"marginTop": "10px"}, children=[
-            dcc.Tab(label=lbl, value=val, style=TAB_STYLE, selected_style=TAB_SELECTED, children=build())
-            for lbl, val, build in ISSUER_SUBTABS]),
-    ])
+    if not _engine_ready():
+        return ds.container([ds.panel(note(
+            "Issuer analysis needs the internal research engine (research_db), which is not "
+            "available on this machine. Set NAD_ENGINE / NAD_ENGINE_DIR to enable it — the rest "
+            "of the dashboard works normally."))])
+    return _subtabs("credit", ISSUER_SUBTABS,
+                    [dcc.Download(id="cred-pdf-dl"), dcc.Download(id="liqm-pdf-dl"), dcc.Download(id="prosp-pdf-dl")])
 
 
-SENTIMENT_CSV = Path(__file__).resolve().parent / "sentiment.csv"
-SENTIMENT_BASKETS = {
-    "Risk-Off":  ["recession", "vix"],
-    "Inflation": ["inflation", "rate hike"],
-    "Credit":    ["credit spread", "high yield"],
-    "Risk-On":   ["market rally", "bitcoin"],
-}
-SENTIMENT_TERMS = [t for terms in SENTIMENT_BASKETS.values() for t in terms]
-SENTIMENT_CLR = {b: ds.CHART_PALETTE[i % len(ds.CHART_PALETTE)]
-                 for i, b in enumerate(SENTIMENT_BASKETS)}
-SENTIMENT_OF = {t: b for b, terms in SENTIMENT_BASKETS.items() for t in terms}
-
-
-def _sentiment_demo(seed: int = 0) -> pd.DataFrame:
-    rng = np.random.default_rng(seed)
-    n = 104
-    idx = pd.date_range(end=pd.Timestamp.today().normalize(), periods=n, freq="W-MON")
-    out = {}
-    for t in SENTIMENT_TERMS:
-        x = np.zeros(n)
-        for i in range(1, n):
-            x[i] = 0.85 * x[i - 1] + rng.normal()
-        out[t] = (x - x.mean()) / (x.std() or 1.0)
-    return pd.DataFrame(out, index=idx)
-
-
-def sentiment_load() -> pd.DataFrame:
-    try:
-        if SENTIMENT_CSV.exists():
-            df = pd.read_csv(SENTIMENT_CSV, index_col=0, parse_dates=True)
-            if len(df) and all(t in df.columns for t in SENTIMENT_TERMS):
-                return df
-    except Exception as ex:
-        print(f"[markets] sentiment.csv unlesbar, nutze Demo: {ex}")
-    return _sentiment_demo()
-
-
-def sentiment_agg(df: pd.DataFrame) -> pd.DataFrame:
-    return pd.DataFrame({b: df[[t for t in terms if t in df.columns]].mean(axis=1)
-                         for b, terms in SENTIMENT_BASKETS.items()}, index=df.index)
-
-
-def fig_sentiment_agg(a: pd.DataFrame):
-    f = go.Figure()
-    f.add_hline(y=0, line_color=ds.HEX["border"], line_width=1)
-    for b in a.columns:
-        f.add_scatter(x=a.index, y=a[b], mode="lines", name=b,
-                      line=dict(color=SENTIMENT_CLR[b], width=2))
-    return legend_right(ds.style_figure(f, height=400, legend=True))
-
-
-def fig_sentiment_term(df: pd.DataFrame, t: str):
-    b = SENTIMENT_OF.get(t, next(iter(SENTIMENT_BASKETS)))
-    f = go.Figure()
-    f.add_hline(y=0, line_color=ds.HEX["border"], line_width=1)
-    f.add_scatter(x=df.index, y=df[t], mode="lines", name=t,
-                  line=dict(color=SENTIMENT_CLR[b], width=2.5),
-                  fill="tozeroy", fillcolor="rgba(33,88,128,.08)")
-    return ds.style_figure(f, height=320)
-
-
-def tab_sentiment():
-    df0 = sentiment_load()
-    return ds.container([
-        html.Div([
-            html.Span(id="mkt-msg", style={**ds.LABEL_STYLE, "textTransform": "none", "letterSpacing": 0}),
-            html.Button("↻ Refresh", id="mkt-refresh", n_clicks=0,
-                        style={**ds.BUTTON_STYLE, "marginLeft": "18px"}),
-        ], style={"display": "flex", "alignItems": "center", "justifyContent": "flex-end",
-                  "margin": "18px 0 2px"}),
-        block("Current sentiment — Google Trends baskets, z-scored", [
-            html.Div(id="mkt-cards", style={"display": "flex", "gap": "12px", "flexWrap": "wrap"}),
-            note("Weekly Google Trends search intensity per theme, z-standardised over 2 years "
-                 "(>0 = above-average search interest). Without sentiment.csv, demo data is used.")]),
-        block("Aggregate — basket means", chart(fig_sentiment_agg(sentiment_agg(df0)), "mkt-agg")),
-        block("Single term", [
-            html.Div(dcc.Dropdown(
-                id="mkt-term", value=SENTIMENT_TERMS[0], clearable=False,
-                options=[{"label": f"{b} · {t}", "value": t}
-                         for b, terms in SENTIMENT_BASKETS.items() for t in terms],
-                style={"width": "300px", "fontFamily": ds.FONT["family"], "fontSize": "13px"}),
-                style={"marginBottom": "8px"}),
-            dcc.Graph(id="mkt-termfig", config={"displaylogo": False},
-                      figure=fig_sentiment_term(df0, SENTIMENT_TERMS[0]))]),
-        block("Matrix — terms × weeks", ds.data_table(
-            id="mkt-matrix", page_action="native", page_size=15,
-            export_format="csv", export_headers="display",
-            style_table={**ds.TABLE_STYLE, "maxHeight": "none"})),
-    ], max_width=1400)
-
-
-REPORT_ASSETS = ["Equities", "High Yield", "Investment Grade", "Rates / Govies"]
-REPORT_REGIONS = ["USA", "Europe", "Asia", "Emerging Markets", "Global"]
-REPORT_HORIZON = ["Tactical (weeks)", "Strategic (6–12m)"]
-MARKET_REPORT_SYSTEM = (
-    "You are a senior cross-asset strategist writing a concise institutional market briefing in English. "
-    "Use web search for recent (last ~2 weeks) data points and cite sources inline. Write flowing prose "
-    "(no bullet lists), about 12 sentences, covering: current levels & recent direction (price / spread / "
-    "yield), the key macro & rates drivers, primary-market activity and flows, valuation versus history, the "
-    "main risks, and a clear base-case view. Be precise and neutral; avoid hype.")
-
-
-def _market_report(asset: str, region: str, horizon: str) -> str:
-    try:
-        msg = _anthropic().messages.create(
-            model="claude-opus-4-8", max_tokens=1600,
-            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 6}],
-            system=[{"type": "text", "text": MARKET_REPORT_SYSTEM, "cache_control": {"type": "ephemeral"}}],
-            messages=[{"role": "user", "content": f"Market report — asset class: {asset}; "
-                       f"region: {region}; horizon: {horizon}."}])
-        texts = [b.text for b in msg.content if b.type == "text" and b.text.strip()]
-        return texts[-1].strip() if texts else "_(no answer)_"
-    except Exception as e:
-        return f"⚠️ Error generating report: {e}"
-
-
-def tab_market_report():
-    sel = {"fontFamily": ds.FONT["family"], "fontSize": "13px"}
-    return ds.container([
-        block("AI market report — pick a theme, get a ~12-sentence briefing", [
-            html.Div([
-                html.Div(dropdown("rpt-asset", REPORT_ASSETS, REPORT_ASSETS[0], "210px")),
-                html.Div(dropdown("rpt-region", REPORT_REGIONS, REPORT_REGIONS[0], "210px")),
-                html.Div(dropdown("rpt-horizon", REPORT_HORIZON, REPORT_HORIZON[0], "210px")),
-            ], style={"display": "flex", "gap": "12px", "flexWrap": "wrap", "marginBottom": "12px"}),
-            html.Div([
-                html.Button("Generate report", id="rpt-go", n_clicks=0, style=ds.BUTTON_STYLE),
-                html.Span("Live web search via Claude Opus 4.8 — ~15–30 s, billable.",
-                          style={**ds.LABEL_STYLE, "textTransform": "none", "letterSpacing": 0,
-                                 "marginLeft": "14px"}),
-            ], style={"display": "flex", "alignItems": "center"}),
-            dcc.Loading(type="dot", color=ds.COLORS["primary"], children=dcc.Markdown(
-                id="rpt-out", style={"marginTop": "16px", "fontFamily": ds.FONT["family"],
-                "fontSize": "14px", "color": ds.COLORS["text"], "lineHeight": 1.6}))]),
-    ], max_width=1400)
-
-
-MARKETS_SUBTABS = [("Report", "report", tab_market_report), ("Sentiment", "sentiment", tab_sentiment)]
-
-
-def markets_analysis():
-    return html.Div([dcc.Tabs(value="report", style={"marginTop": "10px"}, children=[
-        dcc.Tab(label=lbl, value=val, style=TAB_STYLE, selected_style=TAB_SELECTED, children=build())
-        for lbl, val, build in MARKETS_SUBTABS])])
-
-
-BVI_TEMPLATE = ROOT / "0_tradingVE" / "2_work" / "0_bvi" / "bviSheetOutline.xls"
-BVI_OUTDIR = r"Q:\7_NTP_nordIX_Treasury_plus\1_NAD_Manager\1_bvi"
+BVI_TEMPLATE = Path(os.environ.get("NAD_BVI_TEMPLATE") or (HERE / "bviSheetOutline.xls"))
+BVI_OUTDIR = os.environ.get("NAD_BVI_OUT") or (
+    r"Q:\7_NTP_nordIX_Treasury_plus\1_NAD_Manager\1_bvi"
+    if os.path.isdir(r"Q:\7_NTP_nordIX_Treasury_plus\1_NAD_Manager") else str(HERE / "bvi_out"))
 BVI_SHEET, BVI_FIRST_ROW, BVI_MAXEDGE, BVI_FORCE_OFFSET = "BVI_Securities", 11, 2400, None
 BVI_MODEL = "claude-opus-4-8"
 BVI_PORTFOLIOS = {
@@ -1841,7 +2086,10 @@ def bvi_ticker_of(name):
 
 
 def bvi_write_workbook(dest, rows):
-    import win32com.client as win32
+    try:
+        import win32com.client as win32
+    except ImportError:
+        raise RuntimeError("BVI Excel export needs pywin32 (Windows only) — run: pip install pywin32")
     tpl = str(BVI_TEMPLATE)
     if not os.path.exists(tpl):
         raise RuntimeError(f"Template not found: {tpl}")
@@ -1932,7 +2180,10 @@ def bvi_unique_dest(base):
 
 
 def bvi_img_block(raw):
-    from PIL import Image
+    try:
+        from PIL import Image
+    except ImportError:
+        raise RuntimeError("BVI screenshot reading needs Pillow — run: pip install pillow")
     im = Image.open(io.BytesIO(raw))
     im.load()
     if im.mode != "RGB":
@@ -2029,51 +2280,162 @@ def tab_bvi():
               "marginTop": "12px", "paddingTop": "12px", "borderTop": f"1px solid {C['border']}"})
     return ds.container([
         dcc.Store(id="bvi-pasted"),
-        block("BVI Generator — Bloomberg trade tickets → BVI file", [
+        block("BVI Generator", [
             upload,
             dcc.Loading(type="dot", color=C["primary"], children=html.Div(
                 id="bvi-msg", style={"minHeight": "18px", "margin": "10px 0 2px 2px",
                 "fontSize": "13px", "color": C["primary"], "fontWeight": 600,
                 "fontFamily": ds.FONT["family"]})),
-            note("Vision extraction via Claude Opus 4.8 · saved to: " + BVI_OUTDIR)]),
-        block("Trades — review & correct if needed", [
-            ds.data_table(id="bvi-tbl", columns=[{"name": n, "id": i} for i, n in BVI_COLS], data=[],
+            note("Vision extraction via Claude Opus 4.8 · saved to: " + BVI_OUTDIR),
+            html.Div(ds.data_table(id="bvi-tbl", columns=[{"name": n, "id": i} for i, n in BVI_COLS], data=[],
                 editable=True, row_deletable=True, page_action="none",
+                persistence=True, persistence_type="session", persisted_props=["data"],
                 style_table={**ds.TABLE_STYLE, "maxHeight": "none", "overflowX": "auto"}),
+                style={"marginTop": "16px"}),
             action]),
         html.Div(id="bvi-out", style={"marginTop": "14px"}),
     ], max_width=1400)
 
 
-def tab_experts():
+KSA_RW_SOV = {1: 0, 2: 20, 3: 50, 4: 100, 5: 100, 6: 150, 0: 100}
+KSA_RW_CORP = {1: 20, 2: 50, 3: 100, 4: 100, 5: 150, 6: 150, 0: 100}
+KSA_ADDON = {"cds": 0.05, "irs": 0.005, "fx": 0.04}
+KSA_CPTY_RW = 0.20
+
+
+def _cqs(r) -> int:
+    r = str(r).strip().upper()
+    if r.startswith(("AAA", "AA")):
+        return 1
+    if r.startswith("A"):
+        return 2
+    if r.startswith("BBB"):
+        return 3
+    if r.startswith("BB"):
+        return 4
+    if r.startswith("B"):
+        return 5
+    if r.startswith(("C", "D", "SD")):
+        return 6
+    return 0
+
+
+def _ksa_raw():
+    b, cds, sw = D["bonds"], D["cds"], D["swaps"]
+    cqs_b = b["rating"].map(_cqs)
+    rw_b = np.where(_gov_mask(b), cqs_b.map(KSA_RW_SOV), cqs_b.map(KSA_RW_CORP)).astype(float)
+    rw_c = cds["rating"].map(_cqs).map(KSA_RW_CORP).astype(float)
+    exp_cds = float(cds["nom"].abs().sum())
+    rwa_cds = float((cds["nom"].clip(lower=0) * rw_c / 100).sum()) + exp_cds * KSA_ADDON["cds"] * KSA_CPTY_RW
+    exp_irs = float(sw["nom"].abs().sum()) if "nom" in sw.columns else 0.0
+    return [("Bonds", float(b["mv"].sum()), float((b["mv"] * rw_b / 100).sum())),
+            ("CDS", exp_cds, rwa_cds),
+            ("Cash", float(CASH or 0.0), 0.0),
+            ("IRS", exp_irs, exp_irs * KSA_ADDON["irs"] * KSA_CPTY_RW),
+            ("Futures", 0.0, 0.0),
+            ("FX", float(M["fx_mv"]), 0.0)]
+
+
+def ksa_table():
+    cats = _ksa_raw()
+    tot = sum(r for _, _, r in cats)
+    rows = [{"Category": c, "Exposure": eur(e), "Ø RW": f"{(r / e * 100 if e else 0):.0f} %",
+             "RWA": eur(r), "% NAV": f"{r / NAV * 100:.1f} %"} for c, e, r in cats]
+    rows.append({"Category": "Σ Total", "Exposure": eur(sum(e for _, e, _ in cats)),
+                 "Ø RW": "", "RWA": eur(tot), "% NAV": f"{tot / NAV * 100:.1f} %"})
+    return pd.DataFrame(rows), tot, (tot / NAV * 100 if NAV else 0.0)
+
+
+def _ksa_system():
+    cats = _ksa_raw()
+    tot = sum(r for _, _, r in cats)
+    lines = "\n".join(f"- {c}: exposure {e:,.0f} EUR, RWA {r:,.0f} EUR" for c, e, r in cats)
+    return (
+        "You are a risk analyst inside a fixed-income fund dashboard. Answer what-if questions about the "
+        "fund's KSA (Kreditrisiko-Standardansatz / Basel standardised approach for credit risk).\n\n"
+        "Method: RWA = exposure x risk weight, summed over categories; Fund KSA weight = total RWA / NAV; "
+        "own-funds requirement = 8% x RWA.\n"
+        "Risk weights by credit-quality step — sovereigns: AAA-AA 0%, A 20%, BBB 50%, BB/B 100%, CCC+ 150%; "
+        "corporates/financials: AAA-AA 20%, A 50%, BBB/BB 100%, B/CCC+ 150%; unrated 100%. CDS sold "
+        "protection = reference-name corporate weight on notional (+5% counterparty add-on); IRS 0.5%x20% "
+        "and FX 4%x20% counterparty add-on on notional; futures (CCP) ~0%; cash 0%.\n\n"
+        f"Current fund state:\nNAV: {NAV:,.0f} EUR\nTotal RWA: {tot:,.0f} EUR\n"
+        f"Fund KSA weight: {tot / NAV * 100:.1f}%\nOwn funds @8%: {tot / NAV * 100 * 0.08:.2f}% of NAV\n{lines}\n\n"
+        "When the user proposes a trade, assume it is funded from cash (asset swap, NAV unchanged) unless "
+        "stated. Compute the RWA delta, the new total RWA and the new Fund KSA weight (%). Keep it to 3-5 "
+        "short lines, show the arithmetic, end with the new KSA weight. Rough estimate, not a regulatory "
+        "figure. Answer in the user's language.")
+
+
+def _ksa_chat_view(hist):
+    bubbles = []
+    for m in hist or []:
+        u = m.get("role") == "user"
+        bubbles.append(html.Div(dcc.Markdown(m.get("content", "")), style={
+            "alignSelf": "flex-end" if u else "flex-start", "maxWidth": "86%", "margin": "5px 0",
+            "padding": "9px 14px", "borderRadius": "12px",
+            "background": ds.COLORS["tint"] if u else ds.COLORS["surface"],
+            "border": f"1px solid {ds.COLORS['border']}", "fontFamily": ds.FONT["family"],
+            "fontSize": "13.5px", "color": ds.COLORS["text"]}))
+    return html.Div(bubbles, style={"display": "flex", "flexDirection": "column"})
+
+
+def tab_ksa():
+    if not PORTFOLIO_OK:
+        return data_error_panel("KSA needs portfolio data.", PORTFOLIO_ERR)
+    df, tot_rwa, ksa_w = ksa_table()
+    key = [stat("Fund KSA Weight", f"{ksa_w:.1f} %", "Ø risk weight · RWA / NAV", ds.COLORS["highlight"]),
+           stat("Own Funds @ 8%", f"{ksa_w * 0.08:.2f} %", "capital requirement, % NAV"),
+           stat("Total RWA", eur(tot_rwa), "risk-weighted assets"),
+           stat("Basis (NAV)", eur(NAV), "fund volume")]
     return ds.container([
-        block("Experts", note("Trainable knowledge experts — coming soon."))
+        ds.section("KSA-Score"),
+        _grid(key),
+        block("RWA by category", rep_table(df, export=False)),
+        block("Ask KSA — what-if", [
+            dcc.Loading(type="dot", color=ds.COLORS["primary"],
+                        children=html.Div(id="ksa-chat", style={"marginBottom": "12px"})),
+            html.Div([
+                dcc.Input(id="ksa-q", type="text", debounce=False, style=ISS_INPUT_BIG,
+                          placeholder="e.g. how does the KSA change if I buy a 2 MM BB corporate bond?"),
+                html.Button("Ask", id="ksa-send", n_clicks=0, style=ISS_BTN_BIG),
+            ], style=ISS_CONTROLS_ROW),
+            dcc.Store(id="ksa-hist", data=[], storage_type="session"),
+        ]),
     ], max_width=1400)
 
 
-ADMIN_SUBTABS = [("Experts", "experts", tab_experts), ("BVI", "bvi", tab_bvi)]
+ADMIN_SUBTABS = [("KSA", "ksa", tab_ksa), ("BVI", "bvi", tab_bvi)]
 
 
 def admin_analysis():
-    return html.Div([dcc.Tabs(value="bvi", style={"marginTop": "10px"}, children=[
-        dcc.Tab(label=lbl, value=val, style=TAB_STYLE, selected_style=TAB_SELECTED, children=build())
-        for lbl, val, build in ADMIN_SUBTABS])])
+    return _subtabs("ksa", ADMIN_SUBTABS)
 
 
-TOP_TABS = [("Markets", "markets", markets_analysis),
+TOP_TABS = [("Admin", "admin", admin_analysis),
             ("Portfolio", "pf", portfolio_analysis),
-            ("Issuer", "iss", issuer_analysis),
-            ("Admin", "admin", admin_analysis)]
+            ("Issuer", "iss", issuer_analysis)]
 
 app = Dash(__name__, title="nordIX", suppress_callback_exceptions=True)
 _POLISH_CSS = """
 <style>
   html{scroll-behavior:smooth}
+  #busy{position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;align-items:center;
+    justify-content:center;gap:14px;background:rgba(10,8,28,.62);backdrop-filter:blur(2px);cursor:pointer}
+  #busy.busy-on{display:flex}
+  .busy-ring{width:56px;height:56px;border-radius:50%;border:4px solid rgba(192,163,100,.22);
+    border-top-color:#C0A364;animation:busyspin .8s linear infinite;
+    box-shadow:0 0 22px rgba(192,163,100,.35)}
+  @keyframes busyspin{to{transform:rotate(360deg)}}
+  .busy-txt{font-family:'Georgia Pro',Georgia,serif;font-size:15px;letter-spacing:.4px;color:#D4CEC0;text-transform:lowercase}
+  .busy-pct{font-family:'Georgia Pro',Georgia,serif;font-size:30px;font-weight:600;color:#E7E1D3;
+    font-variant-numeric:tabular-nums;min-width:74px;text-align:center}
+  .busy-hint{font-family:'Helvetica Neue',Arial,sans-serif;font-size:11px;color:#9691A9;opacity:.7}
   .stat-card{-webkit-font-smoothing:antialiased}
-  .stat-card:hover{box-shadow:0 6px 16px rgba(16,24,40,.10),0 2px 5px rgba(16,24,40,.07);
-    transform:translateY(-1px)}
+  .stat-card:hover{box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 10px 26px rgba(0,0,0,.42);
+    transform:translateY(-1px);border-color:rgba(192,163,100,.4)}
   /* Sticky brand header */
-  .cm-header{position:sticky;top:0;z-index:40}
+  .cm-header{position:sticky;top:0;z-index:40;box-shadow:0 12px 34px rgba(0,0,0,.5)}
   /* Tables: tabular figures, row hover */
   .dash-spreadsheet-container .dash-spreadsheet-inner td,
   .dash-spreadsheet-container .dash-spreadsheet-inner input{
@@ -2086,7 +2448,7 @@ _POLISH_CSS = """
     background:var(--c-bg)!important;color:var(--c-text)!important;border:none!important;
     font-family:'Helvetica Neue',Arial,sans-serif!important;font-size:12px!important;font-style:normal!important}
   .dash-spreadsheet-container .dash-filter{border-bottom:1px solid var(--c-hairline)!important}
-  .dash-spreadsheet-container .dash-filter input::placeholder{color:var(--c-muted)!important;opacity:.75}
+  .dash-spreadsheet-container .dash-filter input::placeholder{color:transparent!important}
   .dash-spreadsheet-container .dash-cell--selected,
   .dash-spreadsheet-container td.focused{background:var(--c-tint)!important;
     outline:1px solid var(--c-brand)!important}
@@ -2094,30 +2456,53 @@ _POLISH_CSS = """
   *::-webkit-scrollbar{height:10px;width:10px}
   *::-webkit-scrollbar-thumb{background:rgba(128,128,128,.34);border-radius:6px}
   *::-webkit-scrollbar-thumb:hover{background:rgba(128,128,128,.5)}
-  .tab,button,.Select-control{transition:color .15s,background .15s,border-color .15s,box-shadow .15s}
-  input:focus,textarea:focus{outline:none;box-shadow:0 0 0 3px rgba(14,58,95,.16)}
-  ::selection{background:rgba(14,58,95,.16)}
-  /* Header control cluster */
-  .cm-controls{position:fixed;top:14px;right:20px;z-index:60;display:flex;gap:8px}
-  .cm-ctl{font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;line-height:1;cursor:pointer;
-    width:32px;height:32px;border-radius:8px;border:1px solid var(--c-border);
-    background:var(--c-surface);color:var(--c-text);display:flex;align-items:center;justify-content:center}
-  .cm-ctl:hover{border-color:var(--c-brand);box-shadow:0 2px 8px rgba(14,58,95,.14)}
-  /* Compact density */
-  body.cm-compact .cm-panel{padding:10px 12px!important;margin-bottom:10px!important}
-  body.cm-compact .stat-card{padding:10px 13px!important;min-width:140px!important}
-  body.cm-compact .dash-spreadsheet-inner td,
-  body.cm-compact .dash-spreadsheet-inner th{padding:4px 8px!important;font-size:12px!important}
-  /* Command palette */
-  .cm-cmd{position:fixed;inset:0;z-index:9999;background:rgba(20,22,28,.46);
-    display:flex;align-items:flex-start;justify-content:center;padding-top:14vh}
-  .cm-cmd-box{width:min(560px,92vw);background:var(--c-surface);border:1px solid var(--c-border);
-    border-radius:12px;box-shadow:0 24px 60px rgba(16,18,24,.5);overflow:hidden}
-  .cm-cmd-input{width:100%;box-sizing:border-box;border:none!important;outline:none;
-    padding:15px 18px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:16px;background:var(--c-surface)!important;color:var(--c-text)!important}
-  .cm-cmd-list{max-height:46vh;overflow:auto;border-top:1px solid var(--c-hairline)}
-  .cm-cmd-item{padding:10px 18px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:14px;color:var(--c-text);cursor:pointer}
-  .cm-cmd-item.sel,.cm-cmd-item:hover{background:var(--c-tint)}
+  .tab,button,.dash-dropdown-trigger{transition:color .15s,background .15s,border-color .15s,box-shadow .15s}
+  .tab{flex:0 0 auto!important}
+  .tab-parent,.tab-container{border:none!important;box-shadow:none!important}
+  .cm-header .tab-content{display:none!important}
+  input:focus,textarea:focus{outline:none;box-shadow:0 0 0 3px rgba(192,163,100,.22)}
+  ::selection{background:rgba(192,163,100,.26)}
+  /* Single tight layout — the dense variant, always on */
+  .cm-panel{padding:10px 14px!important;margin-bottom:12px!important}
+  .stat-card{padding:10px 13px!important}
+  .dash-spreadsheet-inner td,.dash-spreadsheet-inner th{padding:4px 8px!important;font-size:12px!important}
+  /* ── dcc.Dropdown = Dash 4.1 CUSTOM dropdown. Themed via its REAL class names. ──
+     Confirmed from async-dropdown.js: .dash-dropdown-trigger is the box, -content the
+     menu, -option each row. The component sets INLINE background:, so !important is required. */
+  .dash-dropdown-trigger,.dash-dropdown-trigger:hover,.dash-dropdown-trigger:focus,
+  .dash-dropdown-trigger:active,.dash-dropdown-trigger[aria-expanded="true"]{
+    background:var(--c-input)!important;color:var(--c-text)!important;
+    border:1px solid rgba(192,163,100,.34)!important;border-radius:10px!important;min-height:36px;
+    padding:8px 12px!important;font-family:'Helvetica Neue',Arial,sans-serif!important;font-size:13px!important;
+    outline:none!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 1px 2px rgba(0,0,0,.28)!important}
+  .dash-dropdown-value{color:#F6F3EC!important;font-weight:500!important}
+  .dash-dropdown-placeholder{color:var(--c-muted)!important}
+  .dash-dropdown-trigger-icon,.dash-dropdown-clear{color:var(--c-muted)!important;
+    fill:var(--c-muted)!important;stroke:var(--c-muted)!important}
+  .dash-dropdown-content{background:var(--c-input)!important;color:var(--c-text)!important;
+    border:1px solid var(--c-border)!important;border-radius:3px!important;overflow:hidden;
+    box-shadow:0 16px 40px rgba(0,0,0,.55)!important}
+  .dash-dropdown-options{background:var(--c-input)!important}
+  .dash-dropdown-option{background:var(--c-input)!important;color:#EDE8DC!important;
+    font-family:'Helvetica Neue',Arial,sans-serif!important;font-size:13px!important;padding:8px 12px!important}
+  .dash-dropdown-option:hover,.dash-dropdown-option[data-state="checked"],
+  .dash-dropdown-option[aria-selected="true"]{background:var(--c-tint)!important;color:var(--c-ink)!important}
+  .dash-dropdown-search,.dash-dropdown-search-container{background:var(--c-input)!important;
+    color:var(--c-text)!important;border-color:var(--c-border)!important}
+  .dash-dropdown-search::placeholder{color:var(--c-muted)!important}
+  .dash-dropdown-search-icon{color:var(--c-muted)!important}
+  /* Issuer search bar: dropdown matched in height and radius to the input + button beside it */
+  .iss-dd .dash-dropdown-trigger{min-height:50px!important;height:50px!important;font-size:15px!important;
+    padding:0 16px!important;border-radius:12px!important;display:flex!important;align-items:center!important}
+  .iss-dd .dash-dropdown-value{font-size:15px!important}
+  .iss-dd .dash-dropdown-option{font-size:14px!important;padding:10px 14px!important}
+  /* Issuer input: readable placeholder + gold focus ring to match the buttons */
+  input[id$="-input"]::placeholder,input[id="prosp-issuer"]::placeholder{color:var(--c-muted)!important;opacity:.85}
+  button,button:focus,button:active,button:focus-visible{outline:none!important}
+  button:hover{filter:brightness(1.05)}
+  /* DataTable — kill stray white behind cells */
+  .dash-spreadsheet-container,.dash-spreadsheet-container .dash-spreadsheet-inner,
+  .dash-spreadsheet-inner svg{background:var(--c-surface)!important}
 </style>
 """
 _BVI_PASTE_JS = """
@@ -2139,103 +2524,119 @@ document.addEventListener('paste', function (e) {
 });
 </script>
 """
-_APP_JS = """
-<script>
-(function(){
-  var d=document.documentElement, LS=window.localStorage;
-  function themeBtn(){return document.getElementById('cm-theme-btn');}
-  function setTheme(t){ d.setAttribute('data-theme',t); try{LS.setItem('cm-theme',t);}catch(e){}
-    var b=themeBtn(); if(b) b.textContent=(t==='dark'?'\\u2600':'\\u263E'); }
-  function setDensity(c){ document.body.classList.toggle('cm-compact',!!c); try{LS.setItem('cm-density',c?'1':'0');}catch(e){} }
-  try{ setTheme(LS.getItem('cm-theme')||'light'); }catch(e){}
-  function tabs(){ return Array.prototype.slice.call(document.querySelectorAll('.tab')); }
-  function openPalette(){
-    if(document.getElementById('cm-cmd'))return;
-    var ov=document.createElement('div'); ov.id='cm-cmd'; ov.className='cm-cmd';
-    var box=document.createElement('div'); box.className='cm-cmd-box';
-    var inp=document.createElement('input'); inp.className='cm-cmd-input'; inp.placeholder='Jump to\\u2026 (type a tab name)';
-    var list=document.createElement('div'); list.className='cm-cmd-list';
-    box.appendChild(inp); box.appendChild(list); ov.appendChild(box); document.body.appendChild(ov);
-    var items=tabs().map(function(el){return {el:el,txt:(el.textContent||'').trim()};}).filter(function(x){return x.txt;});
-    var sel=0;
-    function render(){ var q=inp.value.toLowerCase();
-      var f=items.filter(function(x){return x.txt.toLowerCase().indexOf(q)>=0;});
-      list.innerHTML=''; f.forEach(function(x,i){ var r=document.createElement('div');
-        r.className='cm-cmd-item'+(i===sel?' sel':''); r.textContent=x.txt;
-        r.onmousedown=function(ev){ ev.preventDefault(); x.el.click(); close(); }; list.appendChild(r); });
-      list._f=f; if(sel>=f.length)sel=Math.max(0,f.length-1); }
-    function close(){ ov.remove(); document.removeEventListener('keydown',onkey,true); }
-    function onkey(e){ if(e.key==='Escape'){close();e.preventDefault();}
-      else if(e.key==='ArrowDown'){sel++;render();e.preventDefault();}
-      else if(e.key==='ArrowUp'){sel=Math.max(0,sel-1);render();e.preventDefault();}
-      else if(e.key==='Enter'){var f=list._f||[]; if(f[sel]){f[sel].el.click();close();} e.preventDefault();} }
-    ov.onclick=function(e){ if(e.target===ov)close(); };
-    inp.addEventListener('input',function(){sel=0;render();});
-    document.addEventListener('keydown',onkey,true);
-    render(); setTimeout(function(){inp.focus();},30);
-  }
-  function build(){ if(document.getElementById('cm-controls'))return;
-    var w=document.createElement('div'); w.id='cm-controls'; w.className='cm-controls';
-    function btn(txt,title,fn){ var b=document.createElement('button'); b.className='cm-ctl';
-      b.textContent=txt; b.title=title; b.onclick=fn; return b; }
-    var t=btn(d.getAttribute('data-theme')==='dark'?'\\u2600':'\\u263E','Toggle dark mode',
-      function(){ setTheme(d.getAttribute('data-theme')==='dark'?'light':'dark'); }); t.id='cm-theme-btn';
-    w.appendChild(t);
-    w.appendChild(btn('\\u25A4','Toggle compact density',function(){ setDensity(!document.body.classList.contains('cm-compact')); }));
-    w.appendChild(btn('\\u2318K','Command palette (Ctrl/Cmd+K)',openPalette));
-    document.body.appendChild(w);
-    try{ if((LS.getItem('cm-density')||'0')==='1') setDensity(true); }catch(e){}
-  }
-  document.addEventListener('keydown',function(e){
-    if((e.ctrlKey||e.metaKey) && (e.key==='k'||e.key==='K')){ e.preventDefault(); openPalette(); } });
-  var iv=setInterval(function(){ if(document.querySelector('.cm-page')){ build(); clearInterval(iv);} },200);
-  window.addEventListener('load',build);
-})();
-</script>
-"""
 app.index_string = (ds.index_string().replace("</head>", _POLISH_CSS + "</head>")
-                    .replace("</body>", _BVI_PASTE_JS + _APP_JS + "</body>"))
+                    .replace("</body>", _BVI_PASTE_JS + "</body>"))
+TOP_BUILD = {val: build for _, val, build in TOP_TABS}
+
 app.layout = ds.page([
-    ds.brand_header(""),
-    ds.container([dcc.Tabs(value="pf", children=[
-        dcc.Tab(label=lbl, value=val, style=TOPTAB_STYLE, selected_style=TOPTAB_SELECTED, children=build())
-        for lbl, val, build in TOP_TABS])], max_width=1460),
+    html.Div([
+        html.Div([
+            brand_logo(40),
+            dcc.Tabs(id="top-tabs", value="pf", colors=TAB_COLORS,
+                     persistence=True, persistence_type="session",
+                     style={"display": "flex", "flexWrap": "wrap", "gap": "12px", "border": "none"},
+                     children=[dcc.Tab(label=lbl, value=val, style=TOPTAB_STYLE,
+                                       selected_style=TOPTAB_SELECTED) for lbl, val, _ in TOP_TABS]),
+        ], style={"display": "flex", "alignItems": "center", "gap": "30px", "flexWrap": "wrap",
+                  "justifyContent": "space-between",
+                  "padding": "12px 30px", "background": "linear-gradient(180deg,#12102A,#0A081C)"}),
+        html.Div(style={"height": "2px",
+                        "background": "linear-gradient(90deg,rgba(192,163,100,0),#C0A364 50%,rgba(192,163,100,0))"}),
+        html.Div(style={"height": "1px",
+                        "background": "linear-gradient(90deg,transparent,rgba(0,0,0,.55),transparent)"}),
+    ], className="cm-header"),
+    html.Div([html.Div(build(), id=f"sec-{val}") for _, val, build in TOP_TABS],
+             style={"paddingTop": "6px"}),
+    html.Div([
+        html.Div(className="busy-ring"),
+        html.Div("working…", className="busy-txt"),
+        html.Div("0%", id="busy-pct", className="busy-pct"),
+        html.Div("click to dismiss", className="busy-hint"),
+    ], id="busy", className="busy-off", n_clicks=0),
+    dcc.Interval(id="busy-tick", interval=350, disabled=True, n_intervals=0, max_intervals=200),
 ])
 
 
-@app.callback(Output("mkt-cards", "children"), Output("mkt-agg", "figure"),
-              Output("mkt-matrix", "data"), Output("mkt-matrix", "columns"),
-              Output("mkt-msg", "children"), Input("mkt-refresh", "n_clicks"))
-def refresh_sentiment(n):
-    if n:
+BUSY_SHOW = ["liqm-run", "cred-run", "prosp-search", "prosp-go", "prosp-run-file",
+             "ksa-send", "xac-send", "xap-send", "xam-send"]
+BUSY_HIDE_STORES = ["liqm-store", "cred-store", "prosp-store", "ksa-hist", "xac-hist", "xap-hist", "xam-hist"]
+BUSY_HIDE_STATUS = ["liqm-status", "cred-status", "prosp-status"]
+
+app.clientside_callback(
+    "function(){var c=dash_clientside.callback_context;"
+    "if(!c.triggered||!c.triggered.length){return window.dash_clientside.no_update;}"
+    "var id=c.triggered[0].prop_id.split('.')[0];"
+    "var show=" + json.dumps(BUSY_SHOW) + ";"
+    "if(show.indexOf(id)>=0){return ['busy-on',false,0,'0%'];}"
+    "return ['busy-off',true,0,'0%'];}",
+    [Output("busy", "className"), Output("busy-tick", "disabled"),
+     Output("busy-tick", "n_intervals"), Output("busy-pct", "children")],
+    [Input(b, "n_clicks") for b in BUSY_SHOW]
+    + [Input(s, "data") for s in BUSY_HIDE_STORES]
+    + [Input(s, "children") for s in BUSY_HIDE_STATUS]
+    + [Input("busy", "n_clicks")],
+    prevent_initial_call=True)
+
+app.clientside_callback(
+    "function(n,cur){var v=parseInt(cur)||0;v=v+Math.max(1,Math.floor((96-v)*0.10));"
+    "if(v>96){v=96;}return v+'%';}",
+    Output("busy-pct", "children", allow_duplicate=True),
+    Input("busy-tick", "n_intervals"), State("busy-pct", "children"),
+    prevent_initial_call=True)
+
+
+@app.callback([Output(f"sec-{val}", "style") for _, val, _ in TOP_TABS], Input("top-tabs", "value"))
+def _toggle_top(val):
+    return [{} if v == val else {"display": "none"} for _, v, _ in TOP_TABS]
+
+
+@app.callback(Output("ksa-hist", "data"), Output("ksa-q", "value"),
+              Input("ksa-send", "n_clicks"), Input("ksa-q", "n_submit"),
+              State("ksa-q", "value"), State("ksa-hist", "data"), prevent_initial_call=True)
+def ksa_ask(_n, _s, q, hist):
+    q = (q or "").strip()
+    if not q:
+        return no_update, no_update
+    hist = (hist or []) + [{"role": "user", "content": q}]
+    try:
+        msg = _anthropic().messages.create(model=BVI_MODEL, max_tokens=800,
+                                           system=_ksa_system(), messages=hist)
+        ans = "".join(b.text for b in msg.content if getattr(b, "type", None) == "text").strip()
+    except Exception as ex:
+        ans = f"⚠️ {ex}"
+    return hist + [{"role": "assistant", "content": ans or "(no answer)"}], ""
+
+
+@app.callback(Output("ksa-chat", "children"), Input("ksa-hist", "data"))
+def ksa_render(hist):
+    return _ksa_chat_view(hist) if hist else no_update
+
+
+def _register_xagent(prefix):
+    @app.callback(Output(f"{prefix}-hist", "data"), Output(f"{prefix}-q", "value"),
+                  Input(f"{prefix}-send", "n_clicks"), Input(f"{prefix}-q", "n_submit"),
+                  State(f"{prefix}-q", "value"), State(f"{prefix}-hist", "data"),
+                  State(f"{prefix}-agent", "value"), prevent_initial_call=True)
+    def _cb(_n, _s, q, hist, agent):
+        q = (q or "").strip()
+        if not q:
+            return no_update, no_update
+        who = AGENTS.get(agent, AGENTS[AGENT_ORDER[0]])["name"]
+        hist = (hist or []) + [{"role": "user", "content": q}]
         try:
-            _sentiment_demo(seed=int(n)).to_csv(SENTIMENT_CSV)
+            ans = _agent_reply(agent or AGENT_ORDER[0], hist)
         except Exception as ex:
-            print(f"[markets] sentiment.csv not writable: {ex}")
-    df = sentiment_load()
-    a = sentiment_agg(df)
-    t = df.round(2).sort_index(ascending=False)
-    t.index = t.index.date.astype(str)
-    t = t.reset_index().rename(columns={"index": "Date"})
-    cards = [ds.kpi_card(b, round(float(a[b].iloc[-1]), 2)) for b in a.columns]
-    src = "live CSV" if SENTIMENT_CSV.exists() else "demo"
-    return (cards, fig_sentiment_agg(a), t.to_dict("records"),
-            [{"name": c, "id": c} for c in t.columns],
-            f"{len(df)} weeks · last {df.index[-1].date()} · {src}")
+            ans = f"⚠️ {ex}"
+        return hist + [{"role": "assistant", "content": f"**{who}:** {ans or '(no answer)'}"}], ""
+
+    @app.callback(Output(f"{prefix}-chat", "children"), Input(f"{prefix}-hist", "data"))
+    def _render(hist):
+        return _ksa_chat_view(hist) if hist else no_update
 
 
-@app.callback(Output("mkt-termfig", "figure"),
-              Input("mkt-term", "value"), Input("mkt-refresh", "n_clicks"))
-def sentiment_term_chart(t, _n):
-    return fig_sentiment_term(sentiment_load(), t)
-
-
-@app.callback(Output("rpt-out", "children"), Input("rpt-go", "n_clicks"),
-              State("rpt-asset", "value"), State("rpt-region", "value"),
-              State("rpt-horizon", "value"), prevent_initial_call=True)
-def gen_report(_n, asset, region, horizon):
-    return _market_report(asset or REPORT_ASSETS[0], region or REPORT_REGIONS[0],
-                          horizon or REPORT_HORIZON[0])
+_register_xagent("xac")
+_register_xagent("xap")
+_register_xagent("xam")
 
 
 @app.callback(Output("bvi-tbl", "data"), Output("bvi-msg", "children"),
@@ -2282,6 +2683,7 @@ def bvi_on_save(_n, data):
         return _bvi_statusbox("Please fix these first:", errs, ds.COLORS["negative"])
     saved = []
     try:
+        os.makedirs(BVI_OUTDIR, exist_ok=True)
         for r in rows_in:
             d = bvi_try_date(r.get("trade_date"))
             base = f"{d.strftime('%Y%m%d')}_{bvi_ticker_of(r.get('name'))}"
@@ -2295,49 +2697,40 @@ def bvi_on_save(_n, data):
                           [os.path.basename(p) for p in saved], ds.COLORS["positive"])
 
 
-from flask import send_from_directory, abort as _flask_abort
-
-
-def _archive_dir():
-    for p in _CM_PATHS:
-        if p not in sys.path:
-            sys.path.insert(0, p)
-    import research_db
-    return str(research_db.ARCHIVE_DIR)
-
-
-@app.server.route("/docs/<path:rel>")
-def _serve_doc(rel):
-    try:
-        return send_from_directory(_archive_dir(), rel)
-    except Exception:
-        return _flask_abort(404)
-
-
 @app.callback(Output("cmap", "figure"), Output("cr2", "figure"),
               Input("credit-src", "value"), Input("cmap-x", "value"), Input("cmap-y", "value"))
 def update_credit(src: str, xk: str, yk: str):
-    cdf = credit_view(D, src)
-    return fig_credit_map(cdf, xk, yk), fig_heatmap(cdf)
+    cdf = CREDIT_VIEWS.get(src, CREDIT_VIEWS[CREDIT_SRC[0]])
+    return _safe_fig(lambda: fig_credit_map(cdf, xk, yk)), _safe_fig(lambda: fig_heatmap(cdf))
 
 
-@app.callback(Output("cred-output", "children"), Output("cred-store", "data"),
-              Output("cred-status", "children"), Input("cred-run", "n_clicks"),
-              State("cred-input", "value"), State("cred-mode", "value"), prevent_initial_call=True)
+@app.callback(Output("cred-store", "data"), Output("cred-status", "children"),
+              Input("cred-run", "n_clicks"), State("cred-input", "value"), State("cred-mode", "value"),
+              prevent_initial_call=True)
 def run_credit(_n, company, mode_lbl):
     if not company or not company.strip():
-        return no_update, no_update, "Please enter an issuer."
+        return no_update, "Please enter an issuer."
     try:
         cm = _cm()
     except Exception as ex:
-        return _cm_error(f"Engine not loadable: {ex}"), no_update, ""
+        return no_update, f"Engine not loadable: {ex}"
     mode = CREDIT_MODES.get(mode_lbl, "corp")
     try:
         data = cm._issuer_job(company.strip(), mode, False)
     except Exception as ex:
-        return _cm_error(f"Analysis failed: {ex}"), no_update, ""
+        return no_update, f"Analysis failed: {ex}"
     data.setdefault("_mode", mode)
-    return cm.build_output(data, mode), data, ("from cache" if data.get("_cached") else "done")
+    return data, ("from cache" if data.get("_cached") else "live — done")
+
+
+@app.callback(Output("cred-output", "children"), Input("cred-store", "data"))
+def render_credit(data):
+    if not data:
+        return no_update
+    try:
+        return _cm().build_output(data, data.get("_mode", "corp"))
+    except Exception as ex:
+        return _cm_error(f"Render failed: {ex}")
 
 
 @app.callback(Output("cred-pdf-dl", "data"), Output("pdf-status", "children"),
@@ -2346,30 +2739,52 @@ def credit_pdf(n, data):
     if not n or not data or data.get("error"):
         return no_update, "No report."
     try:
-        cm = _cm()
-        return (dcc.send_bytes(cm.gen_pdf(data, data.get("_mode", "corp")),
-                filename=f"{data.get('company', 'memo')}.pdf"), "Download started.")
+        pdf = _cm().gen_pdf(data, data.get("_mode", "corp"))
+        if callable(pdf):
+            buf = io.BytesIO(); pdf(buf); pdf = buf.getvalue()
     except Exception as ex:
         return no_update, f"Error: {ex}"
+    tick = str(data.get("ticker") or "").strip()
+    if not tick:
+        _w = re.sub(r'[^A-Za-z0-9 ]+', "", str(data.get("company", ""))).split()
+        tick = _w[0] if _w else "memo"
+    tick = re.sub(r'[<>:"/\\|?*\s]+', "", tick) or "memo"
+    name = f"{datetime.date.today():%Y%m%d}_{tick}"
+    try:
+        os.makedirs(CRED_OUTDIR, exist_ok=True)
+        dest = os.path.join(CRED_OUTDIR, f"{name}.pdf")
+        k = 2
+        while os.path.exists(dest):
+            dest = os.path.join(CRED_OUTDIR, f"{name}_{k}.pdf"); k += 1
+        with open(dest, "wb") as fh:
+            fh.write(pdf)
+        return no_update, f"Saved: {dest}"
+    except Exception as ex:
+        return dcc.send_bytes(pdf, filename=f"{name}.pdf"), f"Folder unavailable — downloaded instead ({ex})."
 
 
-@app.callback(Output("liqm-output", "children"), Output("liqm-store", "data"),
-              Output("liqm-status", "children"), Input("liqm-run", "n_clicks"),
-              State("liqm-input", "value"), State("liqm-mode", "value"), prevent_initial_call=True)
+@app.callback(Output("liqm-store", "data"), Output("liqm-status", "children"),
+              Input("liqm-run", "n_clicks"), State("liqm-input", "value"), State("liqm-mode", "value"),
+              prevent_initial_call=True)
 def run_liquidity(_n, company, mode_lbl):
     if not company or not company.strip():
-        return no_update, no_update, "Please enter an issuer."
-    try:
-        cm = _cm()
-    except Exception as ex:
-        return _cm_error(f"Engine not loadable: {ex}"), no_update, ""
+        return no_update, "Please enter an issuer."
     mode = CREDIT_MODES.get(mode_lbl, "corp")
     try:
-        data = cm._liquidity_job(company.strip(), mode, False)
-        panel = build_liq_fans(mode, data, cm)
+        data = _credit_metrics_job(company.strip(), mode)
     except Exception as ex:
-        return _cm_error(f"Model failed: {ex}"), no_update, ""
-    return panel, {"mode": mode}, ("from cache" if data.get("_cached") else "done")
+        return no_update, f"Model failed: {ex}"
+    return {"mode": mode, "issuer": company.strip(), "data": data}, "done"
+
+
+@app.callback(Output("liqm-output", "children"), Input("liqm-store", "data"))
+def render_liquidity(store):
+    if not store or not store.get("data"):
+        return no_update
+    try:
+        return build_credit_model(store["mode"], store["data"], store.get("issuer", ""))
+    except Exception as ex:
+        return _cm_error(f"Model render failed: {ex}")
 
 
 @app.callback(Output("prosp-files-data", "data"), Output("prosp-files", "children"),
@@ -2409,36 +2824,44 @@ def _run_prospectus(cm, issuer, files):
     return result
 
 
-@app.callback(Output("prosp-output", "children"), Output("prosp-store", "data"),
+@app.callback(Output("prosp-store", "data"),
               Input("prosp-go", "n_clicks"), State("prosp-issuer", "value"),
               State("prosp-cand", "data"), prevent_initial_call=True)
 def analyze_prospectus_found(_n, issuer, cand):
     try:
         cm = _cm()
     except Exception as ex:
-        return _cm_error(f"Engine not loadable: {ex}"), no_update
+        return {"_error": f"Engine not loadable: {ex}"}
     url = (cand or {}).get("url", "")
     label = f"{(issuer or '').strip()} — use this prospectus: {url}" if url else (issuer or "").strip()
     try:
-        result = _run_prospectus(cm, label, None)
+        return _run_prospectus(cm, label, None)
     except Exception as ex:
-        return _cm_error(f"Analysis failed: {ex}"), no_update
-    return cm.build_prospectus_output(result), result
+        return {"_error": f"Analysis failed: {ex}"}
 
 
-@app.callback(Output("prosp-output", "children", allow_duplicate=True),
-              Output("prosp-store", "data", allow_duplicate=True),
+@app.callback(Output("prosp-store", "data", allow_duplicate=True),
               Input("prosp-run-file", "n_clicks"), State("prosp-issuer", "value"),
               State("prosp-files-data", "data"), prevent_initial_call=True)
 def analyze_prospectus_file(_n, issuer, files):
     if not files:
-        return no_update, no_update
+        return no_update
     try:
-        cm = _cm()
-        result = _run_prospectus(cm, (issuer or "").strip(), files)
+        return _run_prospectus(_cm(), (issuer or "").strip(), files)
     except Exception as ex:
-        return _cm_error(f"Analysis failed: {ex}"), no_update
-    return cm.build_prospectus_output(result), result
+        return {"_error": f"Analysis failed: {ex}"}
+
+
+@app.callback(Output("prosp-output", "children"), Input("prosp-store", "data"))
+def render_prospectus(data):
+    if not data:
+        return no_update
+    if data.get("_error"):
+        return _cm_error(data["_error"])
+    try:
+        return _cm().build_prospectus_output(data)
+    except Exception as ex:
+        return _cm_error(f"Render failed: {ex}")
 
 
 @app.callback(Output("prosp-pdf-dl", "data"), Output("prosp-pdf-status", "children"),
@@ -2458,15 +2881,6 @@ def prospectus_pdf(n, data):
 def filter_positions(art: str):
     v = POS_VIEW if art == "All" else POS_VIEW[POS_VIEW["Type"] == art]
     return v.to_dict("records")
-
-
-@app.callback(Output("news-output", "children"),
-              Input("news-send", "n_clicks"), State("news-input", "value"),
-              prevent_initial_call=True)
-def answer_news(_n_clicks: int, question: str):
-    if not question or not question.strip():
-        return "_Please enter a question._"
-    return _news_reply(question.strip())
 
 
 if __name__ == "__main__":
